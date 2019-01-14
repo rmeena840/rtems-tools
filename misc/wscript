@@ -70,5 +70,15 @@ def build(bld):
                 cflags = conf['cflags'] + conf['warningflags'],
                 linkflags = conf['linkflags'])
 
+    #
+    # Build rtems-record
+    #
+    bld.program(target = 'rtems-record',
+                source = ['record/record-client.c', 'record/record-main.c', 'record/record-text.c'],
+                includes = ['record'],
+                defines = defines,
+                cflags = conf['cflags'] + conf['warningflags'],
+                linkflags = conf['linkflags'])
+
 def tags(ctx):
     ctx.exec_command('etags $(find . -name \*.[sSch])', shell = True)
