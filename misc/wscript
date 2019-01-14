@@ -83,6 +83,14 @@ def build(bld):
                       chmod = 0o755)
     bld.install_files('${PREFIX}/share/rtems/tools/config',
                       'tools/config/rtems-boot.ini')
+    # Build rtems-record
+    #
+    bld.program(target = 'rtems-record',
+                source = ['record/record-client.c', 'record/record-main.c', 'record/record-text.c'],
+                includes = ['record'],
+                defines = defines,
+                cflags = conf['cflags'] + conf['warningflags'],
+                linkflags = conf['linkflags'])
 
 def tags(ctx):
     ctx.exec_command('etags $(find . -name \*.[sSch])', shell = True)
