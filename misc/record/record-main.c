@@ -67,6 +67,13 @@ typedef struct client_item {
   uint64_t                     counter;
 } client_item;
 
+typedef struct ctf_event {
+  uint64_t                     ns;
+  uint32_t                     cpu;
+  rtems_record_event           event;
+  uint64_t                     data;
+} ctf_event;
+
 typedef struct client_context {
   uint64_t                       ns_threshold;
   uint64_t                       last_ns;
@@ -76,6 +83,7 @@ typedef struct client_context {
   uint64_t                       counter;
   SLIST_HEAD( , client_item )    free_items;
   RB_HEAD( active, client_item ) active_items;
+  FILE                           *event_stream;
 } client_context;
 
 static inline int item_cmp( const void *pa, const void *pb )
@@ -135,24 +143,15 @@ static int connect_client( const char *host, uint16_t port )
 
 static void print_item( FILE *f, const client_item *item )
 {
-  if ( item->ns != 0 ) {
-    uint32_t seconds;
-    uint32_t nanoseconds;
+  ctf_event ctf_item;
 
-    seconds = (uint32_t) ( item->ns / 1000000000 );
-    nanoseconds = (uint32_t) ( item->ns % 1000000000 );
-    fprintf( f, "%" PRIu32 ".%09" PRIu32 ":", seconds, nanoseconds );
-  } else {
-    fprintf( f, "*:" );
-  }
+  ctf_item.ns = item->ns;
+  ctf_item.cpu= item->cpu;
+  ctf_item.event = item->event;
+  ctf_item.data = item->data;
 
-  fprintf(
-    f,
-    "%" PRIu32 ":%s:%" PRIx64 "\n",
-    item->cpu,
-    rtems_record_event_text( item->event ),
-    item->data
-  );
+  fwrite( &ctf_item, sizeof( ctf_item ), 1, f );
+
 }
 
 static void flush_items( client_context *cctx )
@@ -188,7 +187,7 @@ static void flush_items( client_context *cctx )
 
     RB_REMOVE( active, &cctx->active_items, x );
     SLIST_INSERT_HEAD( &cctx->free_items, x, free_node );
-    print_item( stdout, x );
+    print_item( cctx->event_stream, x);
   }
 }
 
@@ -310,6 +309,10 @@ int main( int argc, char **argv )
   SLIST_INIT( &cctx.free_items );
   RB_INIT( &cctx.active_items );
 
+  FILE *event_stream = fopen( "event" , "wb" );
+  assert( event_stream != NULL );
+  cctx.event_stream = event_stream;
+
   items = calloc( n, sizeof( *items ) );
   assert( items != NULL );
 
@@ -332,6 +335,7 @@ int main( int argc, char **argv )
     }
   }
 
+  fclose( event_stream );
   rv = close( fd );
   assert( rv == 0 );
 
