@@ -39,6 +39,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include<fcntl.h> 
+#include<errno.h>
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -52,6 +54,7 @@ static const struct option longopts[] = {
   { "host", 1, NULL, 'H' },
   { "port", 1, NULL, 'p' },
   { "items", 1, NULL, 'i' },
+  { "input", 1, NULL, 'input' },
   { NULL, 0, NULL, 0 }
 };
 
@@ -111,32 +114,35 @@ RB_GENERATE_INTERNAL( active, client_item, active_node, item_cmp, static inline 
 static void usage( char **argv )
 {
   printf(
-    "%s [--host=HOST] [--port=PORT] [--items=ITEMS]\n"
+    "%s [--host=HOST] [--port=PORT] [--items=ITEMS] [--input=INPUT]\n"
     "\n"
     "Mandatory arguments to long options are mandatory for short options too.\n"
-    "  -h, --help                 print this help text\n"
-    "  -H, --host=HOST            the host IPv4 address of the record server\n"
-    "  -p, --port=PORT            the TCP port of the record server\n"
-    "  -i, --items=ITEMS          the maximum count of active record items\n",
+    "  -h,      --help             print this help text\n"
+    "  -H,      --host=HOST        the host IPv4 address of the record server\n"
+    "  -p,      --port=PORT        the TCP port of the record server\n"
+    "  -i,      --items=ITEMS      the maximum count of active record items\n"
+    "  -input,  --input=INPUT      the file input\n",
     argv[ 0 ]
   );
 }
 
-static int connect_client( const char *host, uint16_t port )
+static int connect_client( const char *host, uint16_t port, const char *input_file  ,bool input_file_flag )
 {
   struct sockaddr_in in_addr;
   int fd;
   int rv;
 
-  fd = socket( PF_INET, SOCK_STREAM, 0 );
+  fd = ( input_file_flag ) ? open( input_file, O_RDONLY ) : socket( PF_INET, SOCK_STREAM, 0 );
   assert( fd >= 0 );
 
   memset( &in_addr, 0, sizeof( in_addr ) );
   in_addr.sin_family = AF_INET;
   in_addr.sin_port = htons( port );
   in_addr.sin_addr.s_addr = inet_addr( host );
+  if( !input_file_flag ){
   rv = connect( fd, (struct sockaddr *) &in_addr, sizeof( in_addr ) );
   assert( rv == 0 );
+  }
 
   return fd;
 }
@@ -268,6 +274,8 @@ int main( int argc, char **argv )
   client_item *items;
   const char *host;
   uint16_t port;
+  const char *input_file;
+  bool input_file_flag = false;
   int fd;
   int rv;
   int opt;
@@ -280,7 +288,7 @@ int main( int argc, char **argv )
   n = RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT * 1024 * 1024;
 
   while (
-    ( opt = getopt_long( argc, argv, "hH:p:i:", &longopts[0], &longindex ) )
+    ( opt = getopt_long( argc, argv, "hH:p:i:input", &longopts[0], &longindex ) )
       != -1
   ) {
     switch ( opt ) {
@@ -296,6 +304,11 @@ int main( int argc, char **argv )
         break;
       case 'i':
         n = (size_t) strtoul( optarg, NULL, 10 );
+        break;
+      case 'input':
+        input_file = optarg;
+        assert( input_file != NULL );
+        input_file_flag = true;
         break;
       default:
         exit( EXIT_FAILURE );
@@ -320,14 +333,14 @@ int main( int argc, char **argv )
     SLIST_INSERT_HEAD( &cctx.free_items, &items[ i ], free_node );
   }
 
-  fd = connect_client( host, port );
+  fd = connect_client( host, port , input_file, input_file_flag );
   rtems_record_client_init( &ctx, handler, &cctx );
 
   while ( true ) {
     int buf[ 8192 ];
     ssize_t n;
 
-    n = recv( fd, buf, sizeof( buf ), 0 );
+    n = ( input_file_flag ) ? read(fd, buf, 10) : recv( fd, buf, sizeof( buf ), 0 );
     if ( n >= 0 ) {
       rtems_record_client_run( &ctx, buf, (size_t) n );
     } else {
