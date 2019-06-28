@@ -340,7 +340,7 @@ int main( int argc, char **argv )
     int buf[ 8192 ];
     ssize_t n;
 
-    n = ( input_file_flag ) ? read(fd, buf, 10) : recv( fd, buf, sizeof( buf ), 0 );
+    n = ( input_file_flag ) ? read(fd, buf, sizeof( buf ) ) : recv( fd, buf, sizeof( buf ), 0 );
     if ( n > 0 ) {
       rtems_record_client_run( &ctx, buf, (size_t) n );
     } else {
