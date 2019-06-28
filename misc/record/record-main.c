@@ -54,7 +54,7 @@ static const struct option longopts[] = {
   { "host", 1, NULL, 'H' },
   { "port", 1, NULL, 'p' },
   { "items", 1, NULL, 'i' },
-  { "input", 1, NULL, 'input' },
+  { "input", 1, NULL, 'f' },
   { NULL, 0, NULL, 0 }
 };
 
@@ -288,7 +288,7 @@ int main( int argc, char **argv )
   n = RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT * 1024 * 1024;
 
   while (
-    ( opt = getopt_long( argc, argv, "hH:p:i:input", &longopts[0], &longindex ) )
+    ( opt = getopt_long( argc, argv, "hH:p:i:f", &longopts[0], &longindex ) )
       != -1
   ) {
     switch ( opt ) {
@@ -305,7 +305,7 @@ int main( int argc, char **argv )
       case 'i':
         n = (size_t) strtoul( optarg, NULL, 10 );
         break;
-      case 'input':
+      case 'f':
         input_file = optarg;
         assert( input_file != NULL );
         input_file_flag = true;
@@ -341,7 +341,7 @@ int main( int argc, char **argv )
     ssize_t n;
 
     n = ( input_file_flag ) ? read(fd, buf, 10) : recv( fd, buf, sizeof( buf ), 0 );
-    if ( n >= 0 ) {
+    if ( n > 0 ) {
       rtems_record_client_run( &ctx, buf, (size_t) n );
     } else {
       break;
