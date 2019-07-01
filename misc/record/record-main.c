@@ -39,8 +39,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <inttypes.h>
-#include<fcntl.h> 
-#include<errno.h>
+#include <fcntl.h> 
+#include <errno.h>
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -72,7 +72,6 @@ typedef struct client_item {
 
 typedef struct ctf_event {
   uint64_t                     ns;
-  uint32_t                     cpu;
   rtems_record_event           event;
   uint64_t                     data;
 } ctf_event;
@@ -86,7 +85,7 @@ typedef struct client_context {
   uint64_t                       counter;
   SLIST_HEAD( , client_item )    free_items;
   RB_HEAD( active, client_item ) active_items;
-  FILE                           *event_stream;
+  FILE                           **event_stream;
 } client_context;
 
 static inline int item_cmp( const void *pa, const void *pb )
@@ -126,13 +125,15 @@ static void usage( char **argv )
   );
 }
 
-static int connect_client( const char *host, uint16_t port, const char *input_file  ,bool input_file_flag )
+static int connect_client( const char *host, uint16_t port, 
+const char *input_file  ,bool input_file_flag )
 {
   struct sockaddr_in in_addr;
   int fd;
   int rv;
 
-  fd = ( input_file_flag ) ? open( input_file, O_RDONLY ) : socket( PF_INET, SOCK_STREAM, 0 );
+  fd = ( input_file_flag ) ? open( input_file, O_RDONLY ) : 
+  socket( PF_INET, SOCK_STREAM, 0 );
   assert( fd >= 0 );
 
   memset( &in_addr, 0, sizeof( in_addr ) );
@@ -147,16 +148,15 @@ static int connect_client( const char *host, uint16_t port, const char *input_fi
   return fd;
 }
 
-static void print_item( FILE *f, const client_item *item )
+static void print_item( FILE **f, const client_item *item )
 {
   ctf_event ctf_item;
 
   ctf_item.ns = item->ns;
-  ctf_item.cpu= item->cpu;
   ctf_item.event = item->event;
   ctf_item.data = item->data;
 
-  fwrite( &ctf_item, sizeof( ctf_item ), 1, f );
+  fwrite( &ctf_item, sizeof( ctf_item ), 1, f[item->cpu] );
 
 }
 
@@ -324,7 +324,7 @@ int main( int argc, char **argv )
 
   FILE *event_stream = fopen( "event" , "wb" );
   assert( event_stream != NULL );
-  cctx.event_stream = event_stream;
+  cctx.event_stream = &event_stream;
 
   items = calloc( n, sizeof( *items ) );
   assert( items != NULL );
@@ -340,7 +340,8 @@ int main( int argc, char **argv )
     int buf[ 8192 ];
     ssize_t n;
 
-    n = ( input_file_flag ) ? read(fd, buf, sizeof( buf ) ) : recv( fd, buf, sizeof( buf ), 0 );
+    n = ( input_file_flag ) ? read(fd, buf, sizeof( buf ) ) : 
+    recv( fd, buf, sizeof( buf ), 0 );
     if ( n > 0 ) {
       rtems_record_client_run( &ctx, buf, (size_t) n );
     } else {
