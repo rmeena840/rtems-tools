@@ -129,16 +129,15 @@ static int* connect_client( const char *host, uint16_t port,
 const char *input_file  ,bool input_file_flag, int *fd )
 {
   struct sockaddr_in in_addr;
-  
+
   int rv[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   size_t i;
   
   for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ){
     fd[ i ] = ( input_file_flag ) ? open( input_file, O_RDONLY ) : 
-    socket( PF_INET, SOCK_STREAM, 0 );    
+    socket( PF_INET, SOCK_STREAM, 0 ); 
+    assert( fd[i] >= 0 );   
   }
-
-  assert( *fd >= 0 );
 
   memset( &in_addr, 0, sizeof( in_addr ) );
   in_addr.sin_family = AF_INET;
@@ -284,6 +283,8 @@ int main( int argc, char **argv )
   uint16_t port;
   const char *input_file;
   bool input_file_flag = false;
+  bool input_TCP_host = false;
+  bool input_TCP_port = false;
   int fd[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   int rv[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   int opt;
@@ -306,9 +307,11 @@ int main( int argc, char **argv )
         break;
       case 'H':
         host = optarg;
+        input_TCP_host = true;
         break;
       case 'p':
         port = (uint16_t) strtoul( optarg, NULL, 10 );
+        input_TCP_port = true;
         break;
       case 'i':
         n = (size_t) strtoul( optarg, NULL, 10 );
@@ -324,6 +327,11 @@ int main( int argc, char **argv )
     }
   }
 
+  if( input_file_flag && ( input_TCP_host || input_TCP_port ) ){
+    printf( "There should be one input medium\n" );
+    exit( EXIT_SUCCESS );
+  }
+
   memset( &cctx, 0, sizeof( cctx ) );
   cctx.only_one_cpu = true;
   cctx.ns_threshold = 2 * THRESHOLD_IN_NS;
@@ -333,8 +341,10 @@ int main( int argc, char **argv )
   FILE *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 
   for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ){
-    char filename[ 256 ];
-    sprintf( filename, "event_%2ld", i );
+    char filename[ 256 ] = "event_";
+    char file_index[ 256 ];
+    snprintf( file_index, sizeof( file_index ), "%ld", i );
+    strcat(filename,file_index);
 
     event_streams[ i ] = fopen( filename , "wb" );
     assert( event_streams[ i ] != NULL );
@@ -348,8 +358,10 @@ int main( int argc, char **argv )
     SLIST_INSERT_HEAD( &cctx.free_items, &items[ i ], free_node );
   }
 
-  int *fds = connect_client( host, port , input_file, input_file_flag, fd );
+  int *fds = connect_client( host, port, input_file, input_file_flag, fd );
   rtems_record_client_init( &ctx, handler, &cctx );
+
+  assert( *fds>=0 );
 
   while ( true ) {
     int buf[ 8192 ];
