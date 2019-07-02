@@ -125,31 +125,25 @@ static void usage( char **argv )
   );
 }
 
-static int* connect_client( const char *host, uint16_t port, 
-const char *input_file  ,bool input_file_flag, int *fd )
+static int connect_client( const char *host, uint16_t port, 
+const char *input_file  ,bool input_file_flag )
 {
   struct sockaddr_in in_addr;
+  int fd;
+  int rv;
 
-  int rv[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
-  size_t i;
+  fd = ( input_file_flag ) ? open( input_file, O_RDONLY ) : 
+  socket( PF_INET, SOCK_STREAM, 0 ); 
+  assert( fd >= 0 );   
   
-  for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ){
-    fd[ i ] = ( input_file_flag ) ? open( input_file, O_RDONLY ) : 
-    socket( PF_INET, SOCK_STREAM, 0 ); 
-    assert( fd[i] >= 0 );   
-  }
 
   memset( &in_addr, 0, sizeof( in_addr ) );
   in_addr.sin_family = AF_INET;
   in_addr.sin_port = htons( port );
   in_addr.sin_addr.s_addr = inet_addr( host );
   if( !input_file_flag ){
-
-  for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ){
-    rv[ i ] = connect( fd[ i ], (struct sockaddr *) &in_addr, sizeof( in_addr ) );
-    assert( rv[ i ] == 0 );
-  }
-
+    rv = connect( fd, (struct sockaddr *) &in_addr, sizeof( in_addr ) );
+    assert( rv == 0 );
   }
 
   return fd;
@@ -285,8 +279,8 @@ int main( int argc, char **argv )
   bool input_file_flag = false;
   bool input_TCP_host = false;
   bool input_TCP_port = false;
-  int fd[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
-  int rv[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+  int fd;
+  int rv;
   int opt;
   int longindex;
   size_t n;
@@ -358,35 +352,26 @@ int main( int argc, char **argv )
     SLIST_INSERT_HEAD( &cctx.free_items, &items[ i ], free_node );
   }
 
-  int *fds = connect_client( host, port, input_file, input_file_flag, fd );
+  fd = connect_client( host, port, input_file, input_file_flag );
   rtems_record_client_init( &ctx, handler, &cctx );
-
-  assert( *fds>=0 );
 
   while ( true ) {
     int buf[ 8192 ];
     ssize_t n;
 
-    bool break_or_not = false;
-
-    for( i = 0;i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT; i++ ){
-
-      n = ( input_file_flag ) ? read( fds[ i ], buf, sizeof( buf ) ) : 
-      recv( fds[ i ], buf, sizeof( buf ), 0 );
+      n = ( input_file_flag ) ? read( fd, buf, sizeof( buf ) ) : 
+      recv( fd, buf, sizeof( buf ), 0 );
       if ( n > 0 ) {
         rtems_record_client_run( &ctx, buf, (size_t) n );
       } else {
-        break_or_not = true;
         break;
       }
 
-    }
-    if( break_or_not ) break;
   }
 
   fclose( *event_streams );
-  *rv = close( *fds );
-  assert( *rv == 0 );
+  rv = close( fd );
+  assert( rv == 0 );
 
   return 0;
 }
