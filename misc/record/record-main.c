@@ -126,7 +126,7 @@ static void usage( char **argv )
 }
 
 static int connect_client( const char *host, uint16_t port, 
-const char *input_file  ,bool input_file_flag )
+const char *input_file, bool input_file_flag )
 {
   struct sockaddr_in in_addr;
   int fd;
@@ -338,7 +338,7 @@ int main( int argc, char **argv )
     char filename[ 256 ] = "event_";
     char file_index[ 256 ];
     snprintf( file_index, sizeof( file_index ), "%ld", i );
-    strcat(filename,file_index);
+    strcat( filename, file_index );
 
     event_streams[ i ] = fopen( filename , "wb" );
     assert( event_streams[ i ] != NULL );
@@ -369,7 +369,10 @@ int main( int argc, char **argv )
 
   }
 
-  fclose( *event_streams );
+  for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ){
+    fclose( event_streams[ i ] );
+  }
+
   rv = close( fd );
   assert( rv == 0 );
 
