@@ -1041,12 +1041,20 @@ trace {
     byte_order = le;
 };
 
+stream {
+
+  packet.context := struct {
+    timestamp_t                  ns;
+    rtems_record_event           events;
+    uint64_t                     data;
+  };
+
+  event.header := struct {
+    uint32_t cpu_id;
+  };
+
+};
+
 event {
-    name = "RTEMS_RECORDING_EVENT";
-    fields := struct {
-		timestamp_t                  ns;
-		uint32_t                     cpu;
-        rtems_record_event           events;
-		uint64_t                     data;
-    };
+  name = "RTEMS_RECORDING_EVENT";
 };
