@@ -288,6 +288,7 @@ int main( int argc, char **argv )
 
   host = "127.0.0.1";
   port = 1234;
+  input_file = "raw_data";
   n = RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT * 1024 * 1024;
 
   while (
