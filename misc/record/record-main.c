@@ -70,6 +70,10 @@ typedef struct client_item {
   uint64_t                     counter;
 } client_item;
 
+typedef struct ctf_stream {
+  uint32_t                     stream_id;
+} ctf_stream;
+
 typedef struct ctf_event {
   uint64_t                     ns;
   rtems_record_event           event;
@@ -273,6 +277,7 @@ int main( int argc, char **argv )
   rtems_record_client_context ctx;
   client_context cctx;
   client_item *items;
+  ctf_stream ctf_stream;
   const char *host;
   uint16_t port;
   const char *input_file;
@@ -342,6 +347,13 @@ int main( int argc, char **argv )
     strcat( filename, file_index );
 
     event_streams[ i ] = fopen( filename , "wb" );
+
+    ctf_stream.stream_id = (uint32_t) i;
+
+    // stream_id of each file. It is needed to be added the very begining of
+    // each stream file
+    fwrite( &ctf_stream, sizeof( ctf_stream ), 1, event_streams[ i ] );
+
     assert( event_streams[ i ] != NULL );
     cctx.event_streams[ i ] = event_streams[ i ];
   }
