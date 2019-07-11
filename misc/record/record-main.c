@@ -79,7 +79,7 @@ typedef struct ctf_event {
   uint64_t                     ns;
   rtems_record_event           event;
   uint64_t                     data;
-} ctf_event;
+} __attribute__((__packed__)) ctf_event;
 
 typedef struct client_context {
   uint64_t                       ns_threshold;
