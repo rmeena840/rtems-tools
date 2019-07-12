@@ -1038,8 +1038,11 @@ typedef enum events_e : uint32_t {
 trace {
     major = 1;
     minor = 8;
+    uuid = "6a7715d0-b502-4c65-8678-6777ac7f755a";
     byte_order = le;
     packet.header := struct {
+        uint32_t magic;
+        uint8_t  uuid[16];
         uint32_t stream_id;
     };
 };
