@@ -48,6 +48,7 @@
 #include "tree.h"
 
 #define THRESHOLD_IN_NS 500000000
+#define CTF_MAGIC 0xC1FC1FC1
 
 static const struct option longopts[] = {
   { "help", 0, NULL, 'h' },
@@ -71,6 +72,8 @@ typedef struct client_item {
 } client_item;
 
 typedef struct ctf_header {
+  uint32_t                     ctf_magic;
+  uint8_t                      uuid[ 16 ];
   uint32_t                     stream_id;
   uint32_t                     cpu_id;
 } ctf_header;
@@ -279,6 +282,7 @@ int main( int argc, char **argv )
   client_context cctx;
   client_item *items;
   ctf_header ctf_header;
+  const char *uuid = "6a7715d0b5024c6586786777ac7f755a";
   const char *host;
   uint16_t port;
   const char *input_file;
@@ -290,7 +294,7 @@ int main( int argc, char **argv )
   int opt;
   int longindex;
   size_t n;
-  size_t i;
+  size_t i, j = 0;
 
   host = "127.0.0.1";
   port = 1234;
@@ -339,6 +343,17 @@ int main( int argc, char **argv )
   SLIST_INIT( &cctx.free_items );
   RB_INIT( &cctx.active_items );
   
+  //extract 2 char string from uuid and add it in ctf_header uuid[16] array
+  for( i = 0; i < 16; i++ ){
+
+    char hex_value[ 2 ];
+    memcpy( hex_value, &uuid[ j ], 2 );
+    j += 2;
+
+    //convert string to hex value
+    ctf_header.uuid [ i ] = ( uint8_t ) strtoul( hex_value, NULL, 16 );
+  }
+
   FILE *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 
   for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ){
@@ -349,11 +364,12 @@ int main( int argc, char **argv )
 
     event_streams[ i ] = fopen( filename , "wb" );
 
+    ctf_header.ctf_magic = CTF_MAGIC;
     ctf_header.stream_id = (uint32_t) 0;
     ctf_header.cpu_id = (uint32_t) i;
 
-    // stream_id = 0 and cpu_id of each file. It is needed to be added the very begining of
-    // each stream file
+    // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
+    // to be added the very begining of each stream file
     fwrite( &ctf_header, sizeof( ctf_header ), 1, event_streams[ i ] );
 
     assert( event_streams[ i ] != NULL );
