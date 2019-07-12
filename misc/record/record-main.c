@@ -96,6 +96,9 @@ typedef struct client_context {
   FILE               *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 } client_context;
 
+static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
+    0x86, 0x78, 0x67, 0x77, 0xac, 0x7f, 0x75, 0x5a };
+
 static inline int item_cmp( const void *pa, const void *pb )
 {
   const client_item *a;
@@ -282,7 +285,6 @@ int main( int argc, char **argv )
   client_context cctx;
   client_item *items;
   ctf_header ctf_header;
-  const char *uuid = "6a7715d0b5024c6586786777ac7f755a";
   const char *host;
   uint16_t port;
   const char *input_file;
@@ -294,7 +296,7 @@ int main( int argc, char **argv )
   int opt;
   int longindex;
   size_t n;
-  size_t i, j = 0;
+  size_t i;
 
   host = "127.0.0.1";
   port = 1234;
@@ -342,17 +344,8 @@ int main( int argc, char **argv )
   cctx.ns_threshold = 2 * THRESHOLD_IN_NS;
   SLIST_INIT( &cctx.free_items );
   RB_INIT( &cctx.active_items );
-  
-  //extract 2 char string from uuid and add it in ctf_header uuid[16] array
-  for( i = 0; i < 16; i++ ){
 
-    char hex_value[ 2 ];
-    memcpy( hex_value, &uuid[ j ], 2 );
-    j += 2;
-
-    //convert string to hex value
-    ctf_header.uuid [ i ] = ( uint8_t ) strtoul( hex_value, NULL, 16 );
-  }
+  memcpy( ctf_header.uuid, uuid, sizeof( ctf_header.uuid ) );
 
   FILE *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 
