@@ -1044,6 +1044,7 @@ trace {
         uint32_t magic;
         uint8_t  uuid[16];
         uint32_t stream_id;
+        uint64_t stream_instance_id;
     };
 };
 
