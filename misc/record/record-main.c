@@ -351,7 +351,7 @@ int main( int argc, char **argv )
   FILE *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 
   for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ){
-    char filename[ 256 ] = "event_";
+    char filename[ 256 ] = "./misc/ctf/event_";
     char file_index[ 256 ];
     snprintf( file_index, sizeof( file_index ), "%ld", i );
     strcat( filename, file_index );
@@ -360,7 +360,7 @@ int main( int argc, char **argv )
 
     ctf_header.ctf_magic = CTF_MAGIC;
     ctf_header.stream_id = (uint32_t) 0;
-    ctf_header.stream_instance_id = ( uint64_t ) 0;
+    ctf_header.stream_instance_id = ( uint64_t ) i;
     ctf_header.cpu_id = (uint32_t) i;
 
     // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
