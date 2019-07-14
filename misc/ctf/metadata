@@ -1,5 +1,6 @@
 /* CTF 1.8 */
 
+typealias integer { size = 5; align = 1; signed = false; } := uint5_t;
 typealias integer { size = 8; align = 8; signed = false; } := uint8_t;
 typealias integer { size = 16; align = 8; signed = false; } := uint16_t;
 typealias integer { size = 32; align = 8; signed = false; } := uint32_t;
@@ -1048,13 +1049,39 @@ trace {
     };
 };
 
+clock {
+        name = "monotonic";
+        uuid = "234d669d-7651-4bc1-a7fd-af581ecc6232";
+        description = "Monotonic Clock";
+        freq = 1000000000; /* Frequency, in Hz */
+        /* clock value offset from Epoch is: offset * (1/freq) */
+        offset = 1539783991179109789;
+};
+
+typealias integer {
+	size = 27; align = 1; signed = false;
+	map = clock.monotonic.value;
+} := uint27_clock_monotonic_t;
+
+typealias integer {
+	size = 32; align = 8; signed = false;
+	map = clock.monotonic.value;
+} := uint32_clock_monotonic_t;
+
+typealias integer {
+	size = 64; align = 8; signed = false;
+	map = clock.monotonic.value;
+} := uint64_clock_monotonic_t;
+
+struct packet_context {
+	uint32_t cpu_id;
+};
+
 // Format of stream file is <stream_id = 0> <cpu_id> <ns> <event> <data> <ns> <event> <data>...
 
 stream {
     id = 0;
-    packet.context := struct {
-        uint32_t cpu_id;
-    };
+    packet.context := struct packet_context;
 };
 
 struct event_field {
