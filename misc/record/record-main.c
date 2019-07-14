@@ -71,13 +71,16 @@ typedef struct client_item {
   uint64_t                     counter;
 } client_item;
 
-typedef struct ctf_header {
+typedef struct ctf_packet_header {
   uint32_t                     ctf_magic;
   uint8_t                      uuid[ 16 ];
   uint32_t                     stream_id;
   uint64_t                     stream_instance_id;
-  uint32_t                     cpu_id;
-} __attribute__((__packed__)) ctf_header;
+} __attribute__((__packed__)) ctf_packet_header;
+
+typedef struct ctf_packet_context {
+	uint32_t cpu_id;
+} ctf_packet_context;
 
 typedef struct ctf_event {
   uint64_t                     ns;
@@ -132,7 +135,7 @@ static void usage( char **argv )
     "  -H,      --host=HOST        the host IPv4 address of the record server\n"
     "  -p,      --port=PORT        the TCP port of the record server\n"
     "  -i,      --items=ITEMS      the maximum count of active record items\n"
-    "  -input,  --input=INPUT      the file input\n",
+    "  -f,      --input=INPUT      the file input\n",
     argv[ 0 ]
   );
 }
@@ -285,7 +288,8 @@ int main( int argc, char **argv )
   rtems_record_client_context ctx;
   client_context cctx;
   client_item *items;
-  ctf_header ctf_header;
+  ctf_packet_header ctf_packet_header;
+  ctf_packet_context ctf_packet_context;
   const char *host;
   uint16_t port;
   const char *input_file;
@@ -346,7 +350,7 @@ int main( int argc, char **argv )
   SLIST_INIT( &cctx.free_items );
   RB_INIT( &cctx.active_items );
 
-  memcpy( ctf_header.uuid, uuid, sizeof( ctf_header.uuid ) );
+  memcpy( ctf_packet_header.uuid, uuid, sizeof( ctf_packet_header.uuid ) );
 
   FILE *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 
@@ -358,14 +362,19 @@ int main( int argc, char **argv )
 
     event_streams[ i ] = fopen( filename , "wb" );
 
-    ctf_header.ctf_magic = CTF_MAGIC;
-    ctf_header.stream_id = (uint32_t) 0;
-    ctf_header.stream_instance_id = ( uint64_t ) i;
-    ctf_header.cpu_id = (uint32_t) i;
+    ctf_packet_header.ctf_magic = CTF_MAGIC;
+    ctf_packet_header.stream_id = (uint32_t) 0;
+    ctf_packet_header.stream_instance_id = ( uint64_t ) i;
+
+    ctf_packet_context.cpu_id = ( uint32_t ) i;
 
     // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
     // to be added the very begining of each stream file
-    fwrite( &ctf_header, sizeof( ctf_header ), 1, event_streams[ i ] );
+    fwrite( &ctf_packet_header, sizeof( ctf_packet_header ), 1, event_streams[ i ] );
+
+    //wrting packet context just after packet header
+    fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1, event_streams[ i ] );
+
 
     assert( event_streams[ i ] != NULL );
     cctx.event_streams[ i ] = event_streams[ i ];
