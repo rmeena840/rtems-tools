@@ -79,8 +79,10 @@ typedef struct ctf_packet_header {
 } __attribute__((__packed__)) ctf_packet_header;
 
 typedef struct ctf_packet_context {
+	uint64_t timestamp_begin;
+	uint64_t timestamp_end;
 	uint32_t cpu_id;
-} ctf_packet_context;
+} __attribute__((__packed__)) ctf_packet_context;
 
 typedef struct ctf_event {
   uint64_t                     ns;
@@ -102,6 +104,8 @@ typedef struct client_context {
 
 static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
     0x86, 0x78, 0x67, 0x77, 0xac, 0x7f, 0x75, 0x5a };
+
+static uint64_t start_ts, end_ts;
 
 static inline int item_cmp( const void *pa, const void *pb )
 {
@@ -167,12 +171,16 @@ const char *input_file, bool input_file_flag )
 static void print_item( FILE **f, const client_item *item )
 {
   ctf_event ctf_item;
+  static size_t ts_counter = 0;
 
   ctf_item.ns = item->ns;
   ctf_item.event = item->event;
   ctf_item.data = item->data;
 
+  if( ts_counter == 0 ) start_ts = item->ns;
+  ts_counter++;
   fwrite( &ctf_item, sizeof( ctf_item ), 1, f[ item->cpu ] );
+  if( ts_counter != 0 ) end_ts = item->ns;
 
 }
 
@@ -354,8 +362,8 @@ int main( int argc, char **argv )
 
   FILE *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 
-  for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ){
-    char filename[ 256 ] = "./misc/ctf/event_";
+  for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ) {
+    char filename[ 256 ] = "event_";
     char file_index[ 256 ];
     snprintf( file_index, sizeof( file_index ), "%ld", i );
     strcat( filename, file_index );
@@ -363,9 +371,13 @@ int main( int argc, char **argv )
     event_streams[ i ] = fopen( filename , "wb" );
 
     ctf_packet_header.ctf_magic = CTF_MAGIC;
-    ctf_packet_header.stream_id = (uint32_t) 0;
+    ctf_packet_header.stream_id = ( uint32_t ) 0;
     ctf_packet_header.stream_instance_id = ( uint64_t ) i;
 
+    // Add dummy data at the begining of file so that later only this part
+    // can be overwritten
+    ctf_packet_context.timestamp_begin = ( uint64_t ) 0;
+    ctf_packet_context.timestamp_end = ( uint64_t ) 0;
     ctf_packet_context.cpu_id = ( uint32_t ) i;
 
     // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
@@ -401,6 +413,29 @@ int main( int argc, char **argv )
       } else {
         break;
       }
+
+  }
+
+  // It will overwrite the packet.header and packet.context only at the 
+  // beginning and won't overwirte the rest data.
+  for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ) {
+    fseek( event_streams[ i ], 0, SEEK_SET );
+
+    ctf_packet_header.ctf_magic = CTF_MAGIC;
+    ctf_packet_header.stream_id = ( uint32_t ) 0;
+    ctf_packet_header.stream_instance_id = ( uint64_t ) i;
+
+    // Replacing the dummy data with actual values.
+    ctf_packet_context.timestamp_begin = ( uint64_t ) start_ts;
+    ctf_packet_context.timestamp_end = ( uint64_t ) end_ts;
+    ctf_packet_context.cpu_id = ( uint32_t ) i;
+
+    // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
+    // to be added the very begining of each stream file
+    fwrite( &ctf_packet_header, sizeof( ctf_packet_header ), 1, event_streams[ i ] );
+
+    //wrting packet context just after packet header
+    fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1, event_streams[ i ] );
 
   }
 
