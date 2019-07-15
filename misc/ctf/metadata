@@ -5,6 +5,7 @@ typealias integer { size = 8; align = 8; signed = false; } := uint8_t;
 typealias integer { size = 16; align = 8; signed = false; } := uint16_t;
 typealias integer { size = 32; align = 8; signed = false; } := uint32_t;
 typealias integer { size = 64; align = 8; signed = false; } := uint64_t;
+typealias integer { size = 64; align = 8; signed = false; } := unsigned long;
 typealias integer { size = 64; align = 8; signed = false; } := timestamp_t;
 
 /* 1024 events are defined. The events are taking values from 0 to 1023. */
@@ -1078,6 +1079,8 @@ struct packet_context {
 	uint64_clock_monotonic_t timestamp_end;
     uint64_t content_size;
 	uint64_t packet_size;
+    uint64_t packet_seq_num;
+	unsigned long events_discarded;
 	uint32_t cpu_id;
 };
 
