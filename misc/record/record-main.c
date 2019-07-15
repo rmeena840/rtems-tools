@@ -83,6 +83,8 @@ typedef struct ctf_packet_context {
 	uint64_t timestamp_end;
   uint64_t content_size;
 	uint64_t packet_size;
+  uint64_t packet_seq_num;
+	unsigned long events_discarded;
 	uint32_t cpu_id;
 } __attribute__((__packed__)) ctf_packet_context;
 
@@ -390,6 +392,8 @@ int main( int argc, char **argv )
     ctf_packet_context.content_size = ( uint64_t ) 0;
     ctf_packet_context.packet_size = ( uint64_t ) 0;
     ctf_packet_context.cpu_id = ( uint32_t ) i;
+    ctf_packet_context.packet_seq_num = ( uint64_t ) 0;
+    ctf_packet_context.events_discarded = ( uint64_t ) 0;
 
     // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
     // to be added the very begining of each stream file
@@ -452,6 +456,9 @@ int main( int argc, char **argv )
     ( sizeof( ctf_packet_header ) + sizeof( ctf_packet_context ) ) * 8;
     ctf_packet_context.packet_size = ( uint64_t ) cctx.packet_size[ i ] +
     ( sizeof( ctf_packet_header ) + sizeof( ctf_packet_context ) ) * 8;
+
+    ctf_packet_context.packet_seq_num = ( uint64_t ) 0;
+    ctf_packet_context.events_discarded = ( uint64_t ) 0;
 
     ctf_packet_context.cpu_id = ( uint32_t ) i;
 
