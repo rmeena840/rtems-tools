@@ -1076,6 +1076,8 @@ typealias integer {
 struct packet_context {
 	uint64_clock_monotonic_t timestamp_begin;
 	uint64_clock_monotonic_t timestamp_end;
+    uint64_t content_size;
+	uint64_t packet_size;
 	uint32_t cpu_id;
 };
 
