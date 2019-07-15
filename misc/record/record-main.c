@@ -170,14 +170,19 @@ const char *input_file, bool input_file_flag )
   return fd;
 }
 
-static void print_item( FILE **f, const client_item *item )
+static void print_item( client_context *cctx, const client_item *item )
 {
   ctf_event ctf_item;
+  FILE **f = cctx->event_streams;
 
   ctf_item.ns = item->ns;
   ctf_item.event = item->event;
   ctf_item.data = item->data;
 
+  if( cctx->timestamp_begin[ item->cpu ] == 0 ) 
+      cctx->timestamp_begin[ item->cpu ] = item->ns;
+  cctx->timestamp_end[ item->cpu ] = item->ns;
+  
   fwrite( &ctf_item, sizeof( ctf_item ), 1, f[ item->cpu ] );
 
 }
@@ -188,7 +193,6 @@ static void flush_items( client_context *cctx )
   uint64_t ns_threshold;
   client_item *x;
   client_item *y;
-  static bool ts_recevied[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ] = { false };
 
   ns = cctx->last_ns;
   ns_threshold = cctx->ns_threshold;
@@ -216,18 +220,7 @@ static void flush_items( client_context *cctx )
 
     RB_REMOVE( active, &cctx->active_items, x );
     SLIST_INSERT_HEAD( &cctx->free_items, x, free_node );
-    print_item( cctx->event_streams , x);
-
-    if( ts_recevied[ x->cpu ] == false ){
-        cctx->timestamp_begin[ x->cpu ] = x->ns;
-        
-        // timestamp_begin equals timestamp_end for only one record item
-        cctx->timestamp_end[ x->cpu ] = x->ns;
-        // timestamp_begin per CPU reveived
-        ts_recevied [ x->cpu ] = true;
-    }else{
-        cctx->timestamp_end[ x->cpu ] = x->ns;
-    }
+    print_item( cctx, x);
 
   }
 }
