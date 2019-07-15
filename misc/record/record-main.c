@@ -100,6 +100,8 @@ typedef struct client_context {
   SLIST_HEAD( , client_item )    free_items;
   RB_HEAD( active, client_item ) active_items;
   FILE               *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+  uint64_t            timestamp_begin[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+	uint64_t            timestamp_end[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 } client_context;
 
 static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
@@ -171,16 +173,12 @@ const char *input_file, bool input_file_flag )
 static void print_item( FILE **f, const client_item *item )
 {
   ctf_event ctf_item;
-  static size_t ts_counter = 0;
 
   ctf_item.ns = item->ns;
   ctf_item.event = item->event;
   ctf_item.data = item->data;
 
-  if( ts_counter == 0 ) start_ts = item->ns;
-  ts_counter++;
   fwrite( &ctf_item, sizeof( ctf_item ), 1, f[ item->cpu ] );
-  if( ts_counter != 0 ) end_ts = item->ns;
 
 }
 
@@ -190,6 +188,7 @@ static void flush_items( client_context *cctx )
   uint64_t ns_threshold;
   client_item *x;
   client_item *y;
+  static bool ts_recevied[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ] = { false };
 
   ns = cctx->last_ns;
   ns_threshold = cctx->ns_threshold;
@@ -218,6 +217,18 @@ static void flush_items( client_context *cctx )
     RB_REMOVE( active, &cctx->active_items, x );
     SLIST_INSERT_HEAD( &cctx->free_items, x, free_node );
     print_item( cctx->event_streams , x);
+
+    if( ts_recevied[ x->cpu ] == false ){
+        cctx->timestamp_begin[ x->cpu ] = x->ns;
+        
+        // timestamp_begin equals timestamp_end for only one record item
+        cctx->timestamp_end[ x->cpu ] = x->ns;
+        // timestamp_begin per CPU reveived
+        ts_recevied [ x->cpu ] = true;
+    }else{
+        cctx->timestamp_end[ x->cpu ] = x->ns;
+    }
+
   }
 }
 
@@ -387,6 +398,9 @@ int main( int argc, char **argv )
     //wrting packet context just after packet header
     fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1, event_streams[ i ] );
 
+    //initializing equal timestamp values per CPU 
+    cctx.timestamp_begin[ i ] = ( uint64_t ) 0;
+    cctx.timestamp_end[ i ] = ( uint64_t ) 0;
 
     assert( event_streams[ i ] != NULL );
     cctx.event_streams[ i ] = event_streams[ i ];
@@ -426,8 +440,8 @@ int main( int argc, char **argv )
     ctf_packet_header.stream_instance_id = ( uint64_t ) i;
 
     // Replacing the dummy data with actual values.
-    ctf_packet_context.timestamp_begin = ( uint64_t ) start_ts;
-    ctf_packet_context.timestamp_end = ( uint64_t ) end_ts;
+    ctf_packet_context.timestamp_begin = ( uint64_t ) cctx.timestamp_begin[ i ];
+    ctf_packet_context.timestamp_end = ( uint64_t ) cctx.timestamp_end[ i ];
     ctf_packet_context.cpu_id = ( uint32_t ) i;
 
     // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
