@@ -81,6 +81,8 @@ typedef struct ctf_packet_header {
 typedef struct ctf_packet_context {
 	uint64_t timestamp_begin;
 	uint64_t timestamp_end;
+  uint64_t content_size;
+	uint64_t packet_size;
 	uint32_t cpu_id;
 } __attribute__((__packed__)) ctf_packet_context;
 
@@ -102,12 +104,12 @@ typedef struct client_context {
   FILE               *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t            timestamp_begin[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 	uint64_t            timestamp_end[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+  uint64_t            content_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+  uint64_t            packet_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 } client_context;
 
 static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
     0x86, 0x78, 0x67, 0x77, 0xac, 0x7f, 0x75, 0x5a };
-
-static uint64_t start_ts, end_ts;
 
 static inline int item_cmp( const void *pa, const void *pb )
 {
@@ -182,6 +184,9 @@ static void print_item( client_context *cctx, const client_item *item )
   if( cctx->timestamp_begin[ item->cpu ] == 0 ) 
       cctx->timestamp_begin[ item->cpu ] = item->ns;
   cctx->timestamp_end[ item->cpu ] = item->ns;
+
+  cctx->content_size[ item->cpu ] += sizeof(ctf_item) * 8; //size in bits   
+  cctx->packet_size[ item->cpu ] += sizeof(ctf_item) * 8; //size in bits
   
   fwrite( &ctf_item, sizeof( ctf_item ), 1, f[ item->cpu ] );
 
@@ -382,6 +387,8 @@ int main( int argc, char **argv )
     // can be overwritten
     ctf_packet_context.timestamp_begin = ( uint64_t ) 0;
     ctf_packet_context.timestamp_end = ( uint64_t ) 0;
+    ctf_packet_context.content_size = ( uint64_t ) 0;
+    ctf_packet_context.packet_size = ( uint64_t ) 0;
     ctf_packet_context.cpu_id = ( uint32_t ) i;
 
     // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
@@ -394,6 +401,9 @@ int main( int argc, char **argv )
     //initializing equal timestamp values per CPU 
     cctx.timestamp_begin[ i ] = ( uint64_t ) 0;
     cctx.timestamp_end[ i ] = ( uint64_t ) 0;
+    
+    cctx.content_size[ i ] = ( uint64_t ) 0;
+    cctx.packet_size[ i ] = ( uint64_t ) 0;
 
     assert( event_streams[ i ] != NULL );
     cctx.event_streams[ i ] = event_streams[ i ];
@@ -435,6 +445,14 @@ int main( int argc, char **argv )
     // Replacing the dummy data with actual values.
     ctf_packet_context.timestamp_begin = ( uint64_t ) cctx.timestamp_begin[ i ];
     ctf_packet_context.timestamp_end = ( uint64_t ) cctx.timestamp_end[ i ];
+    
+    //content_size and packet_size includes all headers and event sizes in bits
+    //There is no padding in native binary stream files so both should be equal
+    ctf_packet_context.content_size = ( uint64_t ) cctx.content_size[ i ] + 
+    ( sizeof( ctf_packet_header ) + sizeof( ctf_packet_context ) ) * 8;
+    ctf_packet_context.packet_size = ( uint64_t ) cctx.packet_size[ i ] +
+    ( sizeof( ctf_packet_header ) + sizeof( ctf_packet_context ) ) * 8;
+
     ctf_packet_context.cpu_id = ( uint32_t ) i;
 
     // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
