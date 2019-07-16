@@ -1050,6 +1050,10 @@ trace {
     };
 };
 
+env {
+	    hostname = "Record_Item";
+};
+
 clock {
         name = "monotonic";
         uuid = "234d669d-7651-4bc1-a7fd-af581ecc6232";
@@ -1084,13 +1088,17 @@ struct packet_context {
 	uint32_t cpu_id;
 };
 
+struct event_header {
+    uint64_clock_monotonic_t timestamp;
+};
+
 stream {
     id = 0;
+    event.header := struct event_header;
     packet.context := struct packet_context;
 };
 
 struct event_field {
-    timestamp_t                  ns;
     rtems_record_event           events;
     uint64_t                     data;
 };
