@@ -1121,7 +1121,6 @@ stream {
 };
 
 struct event_field {
-
     rtems_record_event           events;
     uint64_t                     data;
 };
