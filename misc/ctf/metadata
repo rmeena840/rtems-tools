@@ -1088,6 +1088,32 @@ struct packet_context {
 	uint32_t cpu_id;
 };
 
+struct event_header_compact {
+	enum : uint5_t { compact = 0 ... 30, extended = 31 } id;
+	variant <id> {
+		struct {
+			uint27_clock_monotonic_t timestamp;
+		} compact;
+		struct {
+			uint32_t id;
+			uint64_clock_monotonic_t timestamp;
+		} extended;
+	} v;
+} align(8);
+
+struct event_header_large {
+	enum : uint16_t { compact = 0 ... 65534, extended = 65535 } id;
+	variant <id> {
+		struct {
+			uint32_clock_monotonic_t timestamp;
+		} compact;
+		struct {
+			uint32_t id;
+			uint64_clock_monotonic_t timestamp;
+		} extended;
+	} v;
+} align(8);
+
 struct event_header {
     uint64_clock_monotonic_t timestamp;
 };
@@ -1099,6 +1125,7 @@ stream {
 };
 
 struct event_field {
+
     rtems_record_event           events;
     uint64_t                     data;
 };
