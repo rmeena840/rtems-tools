@@ -1114,13 +1114,9 @@ struct event_header_large {
 	} v;
 } align(8);
 
-struct event_header {
-    uint64_clock_monotonic_t timestamp;
-};
-
 stream {
     id = 0;
-    event.header := struct event_header;
+    event.header := struct event_header_compact;
     packet.context := struct packet_context;
 };
 
