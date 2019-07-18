@@ -93,22 +93,11 @@ typedef struct ctf_event {
   uint64_t                     data;
 } __attribute__((__packed__)) ctf_event;
 
-
-typedef struct uint27_t {
-  unsigned int x : 27;
-} uint27_t;
-
-typedef struct event_header_compact {
-	union {
-		struct {
-			uint27_t timestamp;
-		} compact;
-		struct {
-			uint32_t id;
-			uint64_t timestamp;
-		} extended;
-	};
-} __attribute__((packed, aligned(8))) event_header_compact;
+typedef struct event_header_extended {
+  uint8_t  id;
+  uint32_t event_id;
+  uint64_t ns;
+} __attribute__((__packed__)) event_header_extended;
 
 typedef struct client_context {
   uint64_t                       ns_threshold;
@@ -193,7 +182,7 @@ const char *input_file, bool input_file_flag )
 static void print_item( client_context *cctx, const client_item *item )
 {
   ctf_event ctf_item;
-  event_header_compact event_header_compact;
+  event_header_extended event_header_extended;
   FILE **f = cctx->event_streams;
 
   ctf_item.event = item->event;
@@ -203,13 +192,18 @@ static void print_item( client_context *cctx, const client_item *item )
       cctx->timestamp_begin[ item->cpu ] = item->ns;
   cctx->timestamp_end[ item->cpu ] = item->ns;
 
-  cctx->content_size[ item->cpu ] += sizeof(ctf_item) * 8; //size in bits   
-  cctx->packet_size[ item->cpu ] += sizeof(ctf_item) * 8; //size in bits
+  cctx->content_size[ item->cpu ] += sizeof( ctf_item ) * 8; //size in bits   
+  cctx->packet_size[ item->cpu ] += sizeof( ctf_item ) * 8; //size in bits
   
-  event_header_compact.extended.id = ( uint32_t ) 31;
-  event_header_compact.extended.timestamp = ( uint64_t ) item->ns;
+  event_header_extended.id = ( uint8_t ) 31; //points to extended struct of metadata
+  event_header_extended.event_id = ( uint32_t ) 0; // points to event_id = 0 of metadata
+  event_header_extended.ns = ( uint64_t ) item->ns; // timestamp value
 
-  fwrite( &event_header_compact, sizeof( event_header_compact ), 1, f[ item->cpu ] );
+  
+  cctx->content_size[ item->cpu ] += sizeof( event_header_extended ) * 8; 
+  cctx->packet_size[ item->cpu ] += sizeof( event_header_extended ) * 8;
+
+  fwrite( &event_header_extended, sizeof( event_header_extended ), 1, f[ item->cpu ] );
   fwrite( &ctf_item, sizeof( ctf_item ), 1, f[ item->cpu ] );
 
 }
