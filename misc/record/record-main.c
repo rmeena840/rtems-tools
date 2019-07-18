@@ -89,10 +89,26 @@ typedef struct ctf_packet_context {
 } __attribute__((__packed__)) ctf_packet_context;
 
 typedef struct ctf_event {
-  uint64_t                     ns;
   rtems_record_event           event;
   uint64_t                     data;
 } __attribute__((__packed__)) ctf_event;
+
+
+typedef struct uint27_t {
+  unsigned int x : 27;
+} uint27_t;
+
+typedef struct event_header_compact {
+	union {
+		struct {
+			uint27_t timestamp;
+		} compact;
+		struct {
+			uint32_t id;
+			uint64_t timestamp;
+		} extended;
+	};
+} __attribute__((packed, aligned(8))) event_header_compact;
 
 typedef struct client_context {
   uint64_t                       ns_threshold;
@@ -177,9 +193,9 @@ const char *input_file, bool input_file_flag )
 static void print_item( client_context *cctx, const client_item *item )
 {
   ctf_event ctf_item;
+  event_header_compact event_header_compact;
   FILE **f = cctx->event_streams;
 
-  ctf_item.ns = item->ns;
   ctf_item.event = item->event;
   ctf_item.data = item->data;
 
@@ -190,6 +206,10 @@ static void print_item( client_context *cctx, const client_item *item )
   cctx->content_size[ item->cpu ] += sizeof(ctf_item) * 8; //size in bits   
   cctx->packet_size[ item->cpu ] += sizeof(ctf_item) * 8; //size in bits
   
+  event_header_compact.extended.id = ( uint32_t ) 31;
+  event_header_compact.extended.timestamp = ( uint64_t ) item->ns;
+
+  fwrite( &event_header_compact, sizeof( event_header_compact ), 1, f[ item->cpu ] );
   fwrite( &ctf_item, sizeof( ctf_item ), 1, f[ item->cpu ] );
 
 }
