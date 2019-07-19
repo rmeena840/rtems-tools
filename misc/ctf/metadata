@@ -1051,7 +1051,15 @@ trace {
 };
 
 env {
-	    hostname = "Record_Item";
+	hostname = "Record_Item";
+	domain = "kernel";
+	sysname = "Linux";
+	kernel_release = "4.18.14-arch1-1-ARCH";
+	kernel_version = "#1 SMP PREEMPT Sat Thu 17 13:42:37 UTC 2019";
+	tracer_name = "lttng-modules";
+	tracer_major = 2;
+	tracer_minor = 11;
+	tracer_patchlevel = 0;
 };
 
 clock {
@@ -1121,8 +1129,8 @@ stream {
 };
 
 struct event_field {
-    rtems_record_event           events;
-    uint64_t                     data;
+    rtems_record_event           _event;
+    uint64_t                     _data;
 };
 
 event {
