@@ -1128,14 +1128,16 @@ stream {
     packet.context := struct packet_context;
 };
 
-struct event_field {
-    rtems_record_event           _event;
-    uint64_t                     _data;
+struct switch_fields {
+    integer { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10;} _prev_comm[16];
+    integer { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_tid;
+    integer { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_prio;
+    integer { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_prio;
 };
 
 event {
-    name = "RTEMS_RECORDING_EVENT";
-    stream_id = 0;
-    id = 0;
-    fields := struct event_field;
+        name = "sched_switch";
+        stream_id = 0;
+        id = 0;
+        fields := struct switch_fields;
 };
