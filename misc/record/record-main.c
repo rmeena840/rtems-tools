@@ -88,16 +88,18 @@ typedef struct ctf_packet_context {
 	uint32_t cpu_id;
 } __attribute__((__packed__)) ctf_packet_context;
 
-typedef struct ctf_event {
-  rtems_record_event           event;
-  uint64_t                     data;
-} __attribute__((__packed__)) ctf_event;
-
 typedef struct event_header_extended {
   uint8_t  id;
   uint32_t event_id;
   uint64_t ns;
 } __attribute__((__packed__)) event_header_extended;
+
+typedef struct switch_event{
+  uint8_t                      prev_comm[16];
+  int32_t                      prev_tid;
+  int32_t                      prev_prio;
+  int32_t                      next_prio;
+} __attribute__((__packed__)) switch_event;
 
 typedef struct client_context {
   uint64_t                       ns_threshold;
@@ -181,30 +183,33 @@ const char *input_file, bool input_file_flag )
 
 static void print_item( client_context *cctx, const client_item *item )
 {
-  ctf_event ctf_item;
+  switch_event switch_event;
   event_header_extended event_header_extended;
+  char item_data_str[256];
   FILE **f = cctx->event_streams;
-
-  ctf_item.event = item->event;
-  ctf_item.data = item->data;
 
   if( cctx->timestamp_begin[ item->cpu ] == 0 ) 
       cctx->timestamp_begin[ item->cpu ] = item->ns;
   cctx->timestamp_end[ item->cpu ] = item->ns;
 
-  cctx->content_size[ item->cpu ] += sizeof( ctf_item ) * 8; //size in bits   
-  cctx->packet_size[ item->cpu ] += sizeof( ctf_item ) * 8; //size in bits
-  
   event_header_extended.id = ( uint8_t ) 31; //points to extended struct of metadata
   event_header_extended.event_id = ( uint32_t ) 0; // points to event_id = 0 of metadata
   event_header_extended.ns = ( uint64_t ) item->ns; // timestamp value
 
+  snprintf( item_data_str, sizeof( item_data_str ), "%ld", item->data );
+  memcpy( switch_event.prev_comm, item_data_str, sizeof( switch_event.prev_comm ) );
+  switch_event.prev_tid = item->data;
+  switch_event.prev_prio = ( int32_t ) 0;
+  switch_event.next_prio = ( int32_t ) 0;
   
   cctx->content_size[ item->cpu ] += sizeof( event_header_extended ) * 8; 
   cctx->packet_size[ item->cpu ] += sizeof( event_header_extended ) * 8;
 
+  cctx->content_size[ item->cpu ] += sizeof( switch_event ) * 8; 
+  cctx->packet_size[ item->cpu ] += sizeof( switch_event ) * 8;
+
   fwrite( &event_header_extended, sizeof( event_header_extended ), 1, f[ item->cpu ] );
-  fwrite( &ctf_item, sizeof( ctf_item ), 1, f[ item->cpu ] );
+  fwrite( &switch_event, sizeof( switch_event ), 1, f[ item->cpu ] );
 
 }
 
@@ -483,10 +488,8 @@ int main( int argc, char **argv )
     //wrting packet context just after packet header
     fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1, event_streams[ i ] );
 
-  }
-
-  for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ){
     fclose( event_streams[ i ] );
+
   }
 
   rv = close( fd );
