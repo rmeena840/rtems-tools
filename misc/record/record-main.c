@@ -98,6 +98,9 @@ typedef struct switch_event{
   uint8_t                      prev_comm[16];
   int32_t                      prev_tid;
   int32_t                      prev_prio;
+  int64_t                      prev_state;
+  uint8_t                      next_comm[16];
+  int32_t                      next_tid;
   int32_t                      next_prio;
 } __attribute__((__packed__)) switch_event;
 
@@ -188,28 +191,50 @@ static void print_item( client_context *cctx, const client_item *item )
   char item_data_str[256];
   FILE **f = cctx->event_streams;
 
+  static size_t event_counter = 1;
+  static uint8_t prev_comm[16];
+  static int32_t prev_tid;
+  static uint32_t cpu_id;  
+  static uint64_t ns;
+
   if( cctx->timestamp_begin[ item->cpu ] == 0 ) 
       cctx->timestamp_begin[ item->cpu ] = item->ns;
   cctx->timestamp_end[ item->cpu ] = item->ns;
 
-  event_header_extended.id = ( uint8_t ) 31; //points to extended struct of metadata
-  event_header_extended.event_id = ( uint32_t ) 0; // points to event_id = 0 of metadata
-  event_header_extended.ns = ( uint64_t ) item->ns; // timestamp value
+  if( event_counter % 2 == 0 ){
 
-  snprintf( item_data_str, sizeof( item_data_str ), "%ld", item->data );
-  memcpy( switch_event.prev_comm, item_data_str, sizeof( switch_event.prev_comm ) );
-  switch_event.prev_tid = item->data;
-  switch_event.prev_prio = ( int32_t ) 0;
-  switch_event.next_prio = ( int32_t ) 0;
-  
-  cctx->content_size[ item->cpu ] += sizeof( event_header_extended ) * 8; 
-  cctx->packet_size[ item->cpu ] += sizeof( event_header_extended ) * 8;
+    event_header_extended.id = ( uint8_t ) 31; //points to extended struct of metadata
+    event_header_extended.event_id = ( uint32_t ) cpu_id; // points to event_id of metadata
+    event_header_extended.ns = ( uint64_t ) ns; // timestamp value
 
-  cctx->content_size[ item->cpu ] += sizeof( switch_event ) * 8; 
-  cctx->packet_size[ item->cpu ] += sizeof( switch_event ) * 8;
+    cctx->content_size[ item->cpu ] += sizeof( event_header_extended ) * 8; 
+    cctx->packet_size[ item->cpu ] += sizeof( event_header_extended ) * 8;
 
-  fwrite( &event_header_extended, sizeof( event_header_extended ), 1, f[ item->cpu ] );
-  fwrite( &switch_event, sizeof( switch_event ), 1, f[ item->cpu ] );
+    cctx->content_size[ item->cpu ] += sizeof( switch_event ) * 8; 
+    cctx->packet_size[ item->cpu ] += sizeof( switch_event ) * 8;
+
+    memcpy( switch_event.prev_comm, prev_comm, sizeof( switch_event.prev_comm ) );
+    switch_event.prev_tid = prev_tid;
+    switch_event.prev_prio = ( int32_t ) 0;
+    switch_event.prev_state = 0;
+
+    snprintf( item_data_str, sizeof( item_data_str ), "%ld", item->data );
+    memcpy( switch_event.next_comm, item_data_str, sizeof( switch_event.next_comm ) );
+    switch_event.next_tid = item->data;
+    switch_event.next_prio = ( int32_t ) 0;
+
+    fwrite( &event_header_extended, sizeof( event_header_extended ), 1, f[ item->cpu ] );
+    fwrite( &switch_event, sizeof( switch_event ), 1, f[ item->cpu ] );
+
+  }else{
+    snprintf( item_data_str, sizeof( item_data_str ), "%ld", item->data );
+    memcpy( prev_comm, item_data_str, sizeof( prev_comm ) );
+    prev_tid = item->data;
+    cpu_id = item->cpu;
+    ns = item->ns;
+  }
+
+  event_counter++;
 
 }
 
