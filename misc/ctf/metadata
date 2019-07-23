@@ -6,7 +6,6 @@ typealias integer { size = 16; align = 8; signed = false; } := uint16_t;
 typealias integer { size = 32; align = 8; signed = false; } := uint32_t;
 typealias integer { size = 64; align = 8; signed = false; } := uint64_t;
 typealias integer { size = 64; align = 8; signed = false; } := unsigned long;
-typealias integer { size = 64; align = 8; signed = false; } := timestamp_t;
 
 /* 1024 events are defined. The events are taking values from 0 to 1023. */
 
@@ -1063,12 +1062,12 @@ env {
 };
 
 clock {
-        name = "monotonic";
-        uuid = "234d669d-7651-4bc1-a7fd-af581ecc6232";
-        description = "Monotonic Clock";
-        freq = 1000000000; /* Frequency, in Hz */
-        /* clock value offset from Epoch is: offset * (1/freq) */
-        offset = 1539783991179109789;
+    name = "monotonic";
+    uuid = "234d669d-7651-4bc1-a7fd-af581ecc6232";
+    description = "Monotonic Clock";
+    freq = 1000000000; /* Frequency, in Hz */
+    /* clock value offset from Epoch is: offset * (1/freq) */
+    offset = 1539783991179109789;
 };
 
 typealias integer {
@@ -1132,12 +1131,232 @@ struct switch_fields {
     integer { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10;} _prev_comm[16];
     integer { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_tid;
     integer { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_prio;
+    integer { size = 64; align = 8; signed = 1; encoding = none; base = 10; } _prev_state;
+    integer { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10; } _next_comm[16];
+    integer { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_tid;
     integer { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_prio;
 };
 
 event {
-        name = "sched_switch";
-        stream_id = 0;
-        id = 0;
-        fields := struct switch_fields;
+    name = "sched_switch";
+    stream_id = 0;
+    id = 31;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 30;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 29;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 28;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 27;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 26;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 25;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 24;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 23;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 22;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 21;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 20;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 19;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 18;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 17;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 16;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 15;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 14;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 13;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 12;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 11;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 10;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 9;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 8;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 7;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 6;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 5;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 4;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 3;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 2;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 1;
+    fields := struct switch_fields;
+};
+
+event {
+    name = "sched_switch";
+    stream_id = 0;
+    id = 0;
+    fields := struct switch_fields;
 };
