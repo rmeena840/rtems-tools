@@ -190,8 +190,20 @@ const char *input_file, bool input_file_flag )
 
 static void print_item( client_context *cctx, const client_item *item )
 {
-
   if( cctx->event_counter % 2 == 0 ){
+    // getting prev_* values 
+    char item_data_str[256];
+    snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, item->data );
+    memcpy( cctx->sched_switch[ item->cpu ].prev_comm, item_data_str, 
+    sizeof( cctx->sched_switch[ item->cpu ].prev_comm ) );
+    cctx->sched_switch[ item->cpu ].prev_tid = item->data;
+    cctx->sched_switch[ item->cpu ].prev_prio = 0;
+    cctx->sched_switch[ item->cpu ].prev_state = 0;
+
+    cctx->cpu_id = item->cpu;
+    cctx->ns = item->ns;
+
+  }else {
     event_header_extended event_header_extended;
     char item_data_str[256];
     FILE **f = cctx->event_streams;
@@ -217,10 +229,9 @@ static void print_item( client_context *cctx, const client_item *item )
     fwrite( &cctx->sched_switch[ cctx->cpu_id ], sizeof( cctx->sched_switch[ cctx->cpu_id ] ), 
     1, f[ cctx->cpu_id ] );
 
-    // adding current data of record item
     snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, item->data );
     memcpy( cctx->sched_switch[ item->cpu ].prev_comm, item_data_str, 
-    sizeof( cctx->sched_switch[ item->cpu ].prev_comm ) );
+    sizeof( cctx->sched_switch[ item->cpu  ].prev_comm ) );
     cctx->sched_switch[ item->cpu ].prev_tid = item->data;
     cctx->sched_switch[ item->cpu ].prev_prio = 0;
     cctx->sched_switch[ item->cpu ].prev_state = 0;
@@ -228,19 +239,6 @@ static void print_item( client_context *cctx, const client_item *item )
     cctx->cpu_id = item->cpu;
     cctx->ns = item->ns;
 
-  }else if( cctx->event_counter == 1 ){
-    
-    // first record item received
-    char item_data_str[256];
-    snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, item->data );
-    memcpy( cctx->sched_switch[ item->cpu ].prev_comm, item_data_str, 
-    sizeof( cctx->sched_switch[ item->cpu ].prev_comm ) );
-    cctx->sched_switch[ item->cpu ].prev_tid = item->data;
-    cctx->sched_switch[ item->cpu ].prev_prio = 0;
-    cctx->sched_switch[ item->cpu ].prev_state = 0;
-
-    cctx->cpu_id = item->cpu;
-    cctx->ns = item->ns;
   }
 
   cctx->event_counter++;
