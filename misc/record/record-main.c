@@ -190,7 +190,7 @@ const char *input_file, bool input_file_flag )
 
 static void print_item( client_context *cctx, const client_item *item )
 {
-  if( cctx->event_counter % 2 == 0 ){
+  if( cctx->event_counter == 0 ){
     // getting prev_* values 
     char item_data_str[256];
     snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, item->data );
