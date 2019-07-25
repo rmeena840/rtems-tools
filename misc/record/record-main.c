@@ -104,6 +104,12 @@ typedef struct switch_event{
   int32_t                      next_prio;
 } __attribute__((__packed__)) switch_event;
 
+typedef struct switch_out_int{
+  uint64_t                     ns;
+  uint64_t                     out_data;
+  uint64_t                     in_data;
+} __attribute__((__packed__)) switch_out_int;
+
 typedef struct client_context {
   uint64_t                       ns_threshold;
   uint64_t                       last_ns;
@@ -118,8 +124,7 @@ typedef struct client_context {
 	uint64_t            timestamp_end[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t            content_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t            packet_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
-  switch_event        sched_switch[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ][2];
-  uint64_t            ns[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+  switch_out_int      switch_out_int[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 } client_context;
 
 static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
@@ -193,52 +198,37 @@ static void print_item( client_context *cctx, const client_item *item )
       cctx->timestamp_begin[ item->cpu ] = item->ns;
   cctx->timestamp_end[ item->cpu ] = item->ns;
 
-  if( item->event == 216 ){
+  switch ( item->event )
+  {
+    case 216:
+      cctx->switch_out_int[ item->cpu ].ns = item->ns;
+      cctx->switch_out_int[ item->cpu ].out_data = item->data;
+      break;
+    case 215:
+      cctx->switch_out_int[ item->cpu ].in_data = item->data;
 
-    // prev_* values of RTEMS_RECORD_THREAD_SWITCH_OUT
-    char item_data_str[ 256 ];
-    snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, item->data );
-    memcpy( cctx->sched_switch[ item->cpu ][ 0 ].prev_comm, item_data_str, 
-    sizeof( cctx->sched_switch[ item->cpu  ][ 0 ].prev_comm ) );
-    cctx->sched_switch[ item->cpu ][ 0 ].prev_tid = item->data;
-    cctx->sched_switch[ item->cpu ][ 0 ].prev_prio = 0;
-    cctx->sched_switch[ item->cpu ][ 0 ].prev_state = 0;
-
-    cctx->ns[ item->cpu ] = item->ns;
-
-
-  }else if( item->event == 215 ){
-
-    // next_* values of RTEMS_RECORD_THREAD_SWITCH_OUT
-    char item_data_str[ 256 ];
-    snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, item->data );
-    memcpy( cctx->sched_switch[ item->cpu ][ 0 ].next_comm, item_data_str, 
-    sizeof( cctx->sched_switch[ item->cpu  ][ 0 ].next_comm ) );
-    cctx->sched_switch[ item->cpu ][ 0 ].next_tid = item->data;
-    cctx->sched_switch[ item->cpu ][ 0 ].next_prio = 0;
-
-    // prev_* values of RTEMS_RECORD_THREAD_SWITCH_IN
-    memcpy( cctx->sched_switch[ item->cpu ][ 1 ].prev_comm, item_data_str, 
-    sizeof( cctx->sched_switch[ item->cpu  ][ 1 ].prev_comm ) );
-    cctx->sched_switch[ item->cpu ][ 1 ].prev_tid = item->data;
-    cctx->sched_switch[ item->cpu ][ 1 ].prev_prio = 0;
-    cctx->sched_switch[ item->cpu ][ 1 ].prev_state = 0;
-    
-    // next_* values of RTEMS_RECORD_THREAD_SWITCH_IN
-    memcpy( cctx->sched_switch[ item->cpu ][ 1 ].next_comm, 
-    cctx->sched_switch[ item->cpu ][0].prev_comm, 
-    sizeof( cctx->sched_switch[ item->cpu  ][ 1 ].next_comm ) );
-    cctx->sched_switch[ item->cpu ][ 1 ].next_tid = cctx->sched_switch[ item->cpu ][0].prev_tid;
-    cctx->sched_switch[ item->cpu ][ 1 ].next_prio = 0;    
-
-    // writing 2 events in corresponding CPU file
-    if( cctx->ns[ item->cpu ] == item->ns ){
-
-      size_t i;
-
-      for( i = 0; i < 2; i++){
+      // current timestamp equals record item timestamp than 
+      // write it to corresponding CPU file
+      if( item->ns == cctx->switch_out_int[ item->cpu ].ns){
+        char item_data_str[ 256 ];
+        switch_event switch_event;
         event_header_extended event_header_extended;
         FILE **f = cctx->event_streams;
+
+        // prev_* values
+        snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, 
+        cctx->switch_out_int[ item->cpu ].out_data );
+        memcpy( switch_event.prev_comm, item_data_str, sizeof( switch_event.prev_comm ) );
+        switch_event.prev_tid = cctx->switch_out_int[ item->cpu ].out_data;
+        switch_event.prev_prio = 0;
+        switch_event.prev_state = 0;
+
+        // next_* values
+        snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, 
+        cctx->switch_out_int[ item->cpu ].in_data );
+        memcpy( switch_event.next_comm, item_data_str, sizeof( switch_event.next_comm ) );
+        switch_event.next_tid = cctx->switch_out_int[ item->cpu ].in_data;
+        switch_event.next_prio = 0;
 
         event_header_extended.id = ( uint8_t ) 31; //points to extended struct of metadata
         event_header_extended.event_id = ( uint32_t ) item->cpu; // points to event_id of metadata
@@ -247,17 +237,16 @@ static void print_item( client_context *cctx, const client_item *item )
         cctx->content_size[ item->cpu ] += sizeof( event_header_extended ) * 8; 
         cctx->packet_size[ item->cpu ] += sizeof( event_header_extended ) * 8;
 
-        cctx->content_size[ item->cpu ] += sizeof( cctx->sched_switch[ item->cpu ][i] ) * 8; 
-        cctx->packet_size[ item->cpu] += sizeof( cctx->sched_switch[ item->cpu ][i] ) * 8;
-      
+        cctx->content_size[ item->cpu ] += sizeof( switch_event ) * 8; 
+        cctx->packet_size[ item->cpu] += sizeof( switch_event ) * 8;
+          
         fwrite( &event_header_extended, sizeof( event_header_extended ), 1, f[ item->cpu ] );
-        fwrite( &cctx->sched_switch[ item->cpu ][i], sizeof( cctx->sched_switch[ item->cpu ][i] ), 
-        1, f[ item->cpu ] );
-      
+        fwrite( &switch_event, sizeof( switch_event ), 1, f[ item->cpu ] );
       }
-
-    }
-  
+      break;
+    
+    default:
+      break;
   }
 
 }
