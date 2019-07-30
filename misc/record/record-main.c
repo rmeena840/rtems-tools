@@ -200,11 +200,11 @@ static void print_item( client_context *cctx, const client_item *item )
 
   switch ( item->event )
   {
-    case 216:
+    case RTEMS_RECORD_THREAD_SWITCH_OUT:
       cctx->switch_out_int[ item->cpu ].ns = item->ns;
       cctx->switch_out_int[ item->cpu ].out_data = item->data;
       break;
-    case 215:
+    case RTEMS_RECORD_THREAD_SWITCH_IN:
       cctx->switch_out_int[ item->cpu ].in_data = item->data;
 
       // current timestamp equals record item timestamp than 
