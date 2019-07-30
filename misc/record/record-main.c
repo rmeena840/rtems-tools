@@ -47,8 +47,10 @@
 
 #include "tree.h"
 
-#define THRESHOLD_IN_NS 500000000
-#define CTF_MAGIC 0xC1FC1FC1
+#define THRESHOLD_IN_NS           500000000
+#define CTF_MAGIC                 0xC1FC1FC1
+#define TASK_RUNNING              0x0000
+#define TASK_IDLE                 0x0402
 
 static const struct option longopts[] = {
   { "help", 0, NULL, 'h' },
@@ -108,6 +110,7 @@ typedef struct switch_out_int{
   uint64_t                     ns;
   uint64_t                     out_data;
   uint64_t                     in_data;
+  int64_t                      prev_state;
 } __attribute__((__packed__)) switch_out_int;
 
 typedef struct client_context {
@@ -191,6 +194,11 @@ const char *input_file, bool input_file_flag )
   return fd;
 }
 
+int rtems_object_id_get_api( Objects_Id id )
+{
+  return _Objects_Get_API( id );
+}
+
 static void print_item( client_context *cctx, const client_item *item )
 {
 
@@ -203,6 +211,8 @@ static void print_item( client_context *cctx, const client_item *item )
     case RTEMS_RECORD_THREAD_SWITCH_OUT:
       cctx->switch_out_int[ item->cpu ].ns = item->ns;
       cctx->switch_out_int[ item->cpu ].out_data = item->data;
+      cctx->switch_out_int[ item->cpu ].prev_state = 
+      rtems_object_id_get_api( item->data ) == 1 ? TASK_IDLE : TASK_RUNNING;
       break;
     case RTEMS_RECORD_THREAD_SWITCH_IN:
       cctx->switch_out_int[ item->cpu ].in_data = item->data;
@@ -221,7 +231,7 @@ static void print_item( client_context *cctx, const client_item *item )
         memcpy( switch_event.prev_comm, item_data_str, sizeof( switch_event.prev_comm ) );
         switch_event.prev_tid = cctx->switch_out_int[ item->cpu ].out_data;
         switch_event.prev_prio = 0;
-        switch_event.prev_state = 0;
+        switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
 
         // next_* values
         snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, 
