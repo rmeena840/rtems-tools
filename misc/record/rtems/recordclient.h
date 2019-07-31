@@ -41,12 +41,6 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#ifdef __GNUC__
-  #define RTEMS_INLINE_ROUTINE static __inline__
-#else
-  #define RTEMS_INLINE_ROUTINE static inline
-#endif
-
 /**
  * @addtogroup RTEMSRecord
  *
@@ -54,27 +48,6 @@ extern "C" {
  */
 
 #define RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT 32
-
-typedef uint32_t         Objects_Id;
-typedef Objects_Id       rtems_id;
-
-typedef enum {
-  OBJECTS_NO_API       = 0,
-  OBJECTS_INTERNAL_API = 1,
-  OBJECTS_CLASSIC_API  = 2,
-  OBJECTS_POSIX_API    = 3,
-  OBJECTS_FAKE_OBJECTS_API = 7
-} Objects_APIs;
-
-#define OBJECTS_API_START_BIT     24U
-#define OBJECTS_API_VALID_BITS    (Objects_Id)0x00000007U
-
-RTEMS_INLINE_ROUTINE Objects_APIs _Objects_Get_API(
-  Objects_Id id
-)
-{
-  return (Objects_APIs) ((id >> OBJECTS_API_START_BIT) & OBJECTS_API_VALID_BITS);
-}
 
 typedef enum {
   RTEMS_RECORD_CLIENT_SUCCESS,

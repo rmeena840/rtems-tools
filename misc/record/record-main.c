@@ -194,11 +194,6 @@ const char *input_file, bool input_file_flag )
   return fd;
 }
 
-int rtems_object_id_get_api( Objects_Id id )
-{
-  return _Objects_Get_API( id );
-}
-
 static void print_item( client_context *cctx, const client_item *item )
 {
 
@@ -212,7 +207,7 @@ static void print_item( client_context *cctx, const client_item *item )
       cctx->switch_out_int[ item->cpu ].ns = item->ns;
       cctx->switch_out_int[ item->cpu ].out_data = item->data;
       cctx->switch_out_int[ item->cpu ].prev_state = 
-      rtems_object_id_get_api( item->data ) == 1 ? TASK_IDLE : TASK_RUNNING;
+      ( ( ( item->data >> 24 ) & 0x7 ) == 1 ) ? TASK_IDLE : TASK_RUNNING;
       break;
     case RTEMS_RECORD_THREAD_SWITCH_IN:
       cctx->switch_out_int[ item->cpu ].in_data = item->data;
