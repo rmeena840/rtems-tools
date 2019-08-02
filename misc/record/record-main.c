@@ -319,7 +319,8 @@ static void print_item( client_context *cctx, const client_item *item )
         snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, 
         cctx->switch_out_int[ item->cpu ].out_data );
         memcpy( switch_event.prev_comm, item_data_str, sizeof( switch_event.prev_comm ) );
-        switch_event.prev_tid = cctx->switch_out_int[ item->cpu ].out_data;
+        switch_event.prev_tid = cctx->switch_out_int[ item->cpu ].prev_state ==
+        TASK_IDLE ? 0 : cctx->switch_out_int[ item->cpu ].out_data;
         switch_event.prev_prio = 0;
         switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
 
