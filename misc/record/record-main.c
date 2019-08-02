@@ -51,7 +51,7 @@
 #define CTF_MAGIC                 0xC1FC1FC1
 #define TASK_RUNNING              0x0000
 #define TASK_IDLE                 0x0402
-#define MAP_SIZE_PER_CPU          10000
+#define MAP_SIZE                  1000000
 
 typedef struct map_data {
    uint64_t         key;
@@ -60,13 +60,13 @@ typedef struct map_data {
 
 // hashing the key
 uint64_t hashCode( uint64_t key ) {
-   return key % MAP_SIZE_PER_CPU;
+   return key % MAP_SIZE;
 }
 
-struct map_data *map_search( struct map_data* hashArray[], uint64_t key) {
+struct map_data *map_search( map_data* hashArray[], uint64_t key ) {
   uint64_t hashIndex = hashCode( key );  
 	
-  while( hashArray[hashIndex] != NULL ) {
+  while( hashArray[ hashIndex ] != NULL ) {
 
     if( hashArray[ hashIndex ]->key == key )
         return hashArray[ hashIndex ]; 
@@ -75,20 +75,20 @@ struct map_data *map_search( struct map_data* hashArray[], uint64_t key) {
     ++hashIndex;
   
     // wrap around the table
-    hashIndex %= MAP_SIZE_PER_CPU;
+    hashIndex %= MAP_SIZE;
   }        
 
   return NULL;        
 }
 
-void map_insert(map_data* hashArray[],uint64_t key, const char* data) {
+void map_insert( map_data* hashArray[], uint64_t key, const char* data ) {
 
-  map_data *item = (map_data*) malloc(sizeof(map_data));
+  map_data *item = (map_data*) malloc(sizeof( map_data ));
   item->data = data;  
   item->key = key;
 
   //get the hash 
-  uint64_t hashIndex = hashCode(key);
+  uint64_t hashIndex = hashCode( key );
 
   //move in array until an empty or deleted cell
   while( hashArray[ hashIndex ] != NULL && ( hashArray[hashIndex]->key != 0 || 
@@ -97,7 +97,7 @@ void map_insert(map_data* hashArray[],uint64_t key, const char* data) {
     ++hashIndex;
   
     //wrap around the table
-    hashIndex %= MAP_SIZE_PER_CPU;
+    hashIndex %= MAP_SIZE;
   }
 
   hashArray[ hashIndex ] = item;
@@ -113,10 +113,10 @@ map_data* map_delete( map_data* hashArray[], map_data* item ) {
   while( hashArray[ hashIndex ] != NULL ) {
 
   if( hashArray[hashIndex]->key == key ) {
-    struct map_data* temp = hashArray[ hashIndex ]; 
+    map_data* temp = hashArray[ hashIndex ]; 
 
     // assign a dummy item at deleted position
-    struct map_data* dummyItem = ( struct map_data* ) malloc( sizeof( struct map_data ) );
+    map_data* dummyItem = ( map_data* ) malloc( sizeof( map_data ) );
     dummyItem->key = 0;
     dummyItem->data = NULL;
     hashArray[ hashIndex ] = dummyItem;
@@ -127,27 +127,24 @@ map_data* map_delete( map_data* hashArray[], map_data* item ) {
     ++hashIndex;
 
     // wrap around the table
-    hashIndex %= MAP_SIZE_PER_CPU;
+    hashIndex %= MAP_SIZE;
   }      
 
   return NULL;        
 }
 
-void map_display(map_data* hashArray[]) {
+void map_display( map_data* hashArray[] ) {
    size_t i = 0;
 	
-   for(i = 0; i<MAP_SIZE_PER_CPU; i++) {
+   for(i = 0; i<MAP_SIZE; i++) {
 	
     if( hashArray[i] != NULL )
-        printf( "(%ld,%s)\n", hashArray[i]->key, hashArray[i]->data );
+        printf( "(%ld,%s)\n", hashArray[ i ]->key, hashArray[ i ]->data );
    }
 	
    printf("\n");
 }
 
-typedef struct map_per_cpu {
-  map_data* hashArray[ MAP_SIZE_PER_CPU ];
-} map_per_cpu;
 
 static const struct option longopts[] = {
   { "help", 0, NULL, 'h' },
@@ -225,7 +222,7 @@ typedef struct client_context {
   uint64_t            content_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t            packet_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   switch_out_int      switch_out_int[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
-  map_per_cpu         map_per_cpu[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+  map_data*           hashArray[ MAP_SIZE ];
 } client_context;
 
 static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
@@ -298,8 +295,6 @@ static void print_item( client_context *cctx, const client_item *item )
   if( cctx->timestamp_begin[ item->cpu ] == 0 ) 
       cctx->timestamp_begin[ item->cpu ] = item->ns;
   cctx->timestamp_end[ item->cpu ] = item->ns;
-
-  map_insert( cctx->map_per_cpu[ item->cpu ].hashArray, item->data, rtems_record_event_text( item->event ));
 
   switch ( item->event )
   {
@@ -540,8 +535,6 @@ int main( int argc, char **argv )
     char file_index[ 256 ];
     snprintf( file_index, sizeof( file_index ), "%ld", i );
     strcat( filename, file_index );
-
-    memset( &cctx.map_per_cpu[ i ].hashArray, 0, sizeof( cctx.map_per_cpu[ i ].hashArray ));
 
     event_streams[ i ] = fopen( filename , "wb" );
 
