@@ -430,8 +430,7 @@ static rtems_record_client_status handler(
   }
 
   if (
-    ns != 0
-      && event != RTEMS_RECORD_UPTIME_LOW
+    event != RTEMS_RECORD_UPTIME_LOW
       && event != RTEMS_RECORD_UPTIME_HIGH
   ) {
     uint64_t counter;
