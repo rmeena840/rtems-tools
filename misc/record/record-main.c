@@ -328,7 +328,8 @@ static void print_item( client_context *cctx, const client_item *item )
         snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, 
         cctx->switch_out_int[ item->cpu ].in_data );
         memcpy( switch_event.next_comm, item_data_str, sizeof( switch_event.next_comm ) );
-        switch_event.next_tid = cctx->switch_out_int[ item->cpu ].in_data;
+        switch_event.next_tid = cctx->switch_out_int[ item->cpu ].prev_state ==
+        TASK_IDLE ? 0 : cctx->switch_out_int[ item->cpu ].in_data;
         switch_event.next_prio = 0;
 
         event_header_extended.id = ( uint8_t ) 31; //points to extended struct of metadata
