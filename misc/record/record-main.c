@@ -334,7 +334,7 @@ static void print_item( client_context *cctx, const client_item *item )
         switch_event.next_prio = 0;
 
         event_header_extended.id = ( uint8_t ) 31; //points to extended struct of metadata
-        event_header_extended.event_id = ( uint32_t ) item->cpu; // points to event_id of metadata
+        event_header_extended.event_id = ( uint32_t ) 0; // points to event_id of metadata
         event_header_extended.ns = ( uint64_t ) item->ns; // timestamp value
 
         cctx->content_size[ item->cpu ] += sizeof( event_header_extended ) * 8; 
