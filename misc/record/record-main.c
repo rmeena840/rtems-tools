@@ -51,6 +51,7 @@
 #define CTF_MAGIC                 0xC1FC1FC1
 #define TASK_RUNNING              0x0000
 #define TASK_IDLE                 0x0402
+#define THREAD_NAME_SIZE          16
 
 static const struct option longopts[] = {
   { "help", 0, NULL, 'h' },
@@ -97,11 +98,11 @@ typedef struct event_header_extended {
 } __attribute__((__packed__)) event_header_extended;
 
 typedef struct switch_event{
-  uint8_t                      prev_comm[16];
+  uint8_t                      prev_comm[ THREAD_NAME_SIZE ];
   int32_t                      prev_tid;
   int32_t                      prev_prio;
   int64_t                      prev_state;
-  uint8_t                      next_comm[16];
+  uint8_t                      next_comm[ THREAD_NAME_SIZE ];
   int32_t                      next_tid;
   int32_t                      next_prio;
 } __attribute__((__packed__)) switch_event;
@@ -112,6 +113,13 @@ typedef struct switch_out_int{
   uint64_t                     in_data;
   int64_t                      prev_state;
 } __attribute__((__packed__)) switch_out_int;
+
+typedef struct thread_id_name{
+  uint64_t thread_id;
+  size_t api_0_index;
+  size_t api_1_index;
+  size_t api_2_index;
+} thread_id_name;
 
 typedef struct client_context {
   uint64_t                       ns_threshold;
@@ -128,6 +136,14 @@ typedef struct client_context {
   uint64_t            content_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t            packet_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   switch_out_int      switch_out_int[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+
+  /**
+   * @brief Thread names indexed by API and object index.
+   * 
+   * The API indices are 0 for Internal API, 1 for Classic API and 2 for POSIX API.
+   */
+  char thread_names[ 3 ][ 65536 ][ THREAD_NAME_SIZE] ;
+  thread_id_name thread_id_name;
 } client_context;
 
 static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
@@ -251,6 +267,32 @@ static void print_item( client_context *cctx, const client_item *item )
         fwrite( &event_header_extended, sizeof( event_header_extended ), 1, f[ item->cpu ] );
         fwrite( &switch_event, sizeof( switch_event ), 1, f[ item->cpu ] );
       }
+      break;
+    case RTEMS_RECORD_THREAD_ID:
+      cctx->thread_id_name.thread_id = item->data;
+      break;
+    case RTEMS_RECORD_THREAD_NAME:
+      ;
+      uint8_t api_id = ( ( cctx->thread_id_name.thread_id >> 24 ) & 0x7 );
+
+      char item_name_str[ 256 ];
+      snprintf( item_name_str, sizeof( item_name_str ), "%08"PRIx64, item->data );
+
+      size_t thread_id = 0;
+
+      if( api_id == 0 ){
+        thread_id = cctx->thread_id_name.api_0_index;
+        cctx->thread_id_name.api_0_index++;
+      }else if( api_id == 1 ){
+        thread_id = cctx->thread_id_name.api_1_index;
+        cctx->thread_id_name.api_1_index++;
+      }else if( api_id == 2 ){
+        thread_id = cctx->thread_id_name.api_2_index;
+        cctx->thread_id_name.api_2_index++;
+      }
+
+      memcpy( cctx->thread_names[api_id][thread_id], item_name_str, 
+      sizeof( cctx->thread_names[api_id][thread_id] ) );
       break;
     
     default:
