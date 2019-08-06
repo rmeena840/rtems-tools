@@ -301,7 +301,7 @@ static void print_item( client_context *cctx, const client_item *item )
             thread_name = ( thread_name >> 8 );
         }
 
-        cctx->thread_id_name[ item->cpu ].name_index = 0;
+        cctx->thread_id_name[ item->cpu ].name_index++;
       }
       break;
     
