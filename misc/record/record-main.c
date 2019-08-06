@@ -116,9 +116,6 @@ typedef struct switch_out_int{
 
 typedef struct thread_id_name{
   uint64_t thread_id;
-  size_t api_0_index;
-  size_t api_1_index;
-  size_t api_2_index;
 } thread_id_name;
 
 typedef struct client_context {
@@ -143,7 +140,7 @@ typedef struct client_context {
    * The API indices are 0 for Internal API, 1 for Classic API and 2 for POSIX API.
    */
   char thread_names[ 3 ][ 65536 ][ THREAD_NAME_SIZE] ;
-  thread_id_name thread_id_name;
+  thread_id_name thread_id_name[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 } client_context;
 
 static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
@@ -269,30 +266,22 @@ static void print_item( client_context *cctx, const client_item *item )
       }
       break;
     case RTEMS_RECORD_THREAD_ID:
-      cctx->thread_id_name.thread_id = item->data;
+      cctx->thread_id_name[ item->cpu ].thread_id = item->data;
       break;
     case RTEMS_RECORD_THREAD_NAME:
       ;
-      uint8_t api_id = ( ( cctx->thread_id_name.thread_id >> 24 ) & 0x7 );
+      size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 );
+      size_t thread_id = ( cctx->thread_id_name[ item->cpu ].thread_id & 0xffff );
+      uint64_t thread_name = item->data;
 
-      char item_name_str[ 256 ];
-      snprintf( item_name_str, sizeof( item_name_str ), "%08"PRIx64, item->data );
+      size_t i = 0;
 
-      size_t thread_id = 0;
-
-      if( api_id == 0 ){
-        thread_id = cctx->thread_id_name.api_0_index;
-        cctx->thread_id_name.api_0_index++;
-      }else if( api_id == 1 ){
-        thread_id = cctx->thread_id_name.api_1_index;
-        cctx->thread_id_name.api_1_index++;
-      }else if( api_id == 2 ){
-        thread_id = cctx->thread_id_name.api_2_index;
-        cctx->thread_id_name.api_2_index++;
+      for( i = 0; i < THREAD_NAME_SIZE - 1; i++ ){
+        if( cctx->thread_names[ api_id ][ thread_id ][ i ] == 0x00 ){
+          cctx->thread_names[ api_id ][ thread_id ][ i ] = ( thread_name  & 0xff );
+          thread_name = ( thread_name >> 8 );
+        }
       }
-
-      memcpy( cctx->thread_names[api_id][thread_id], item_name_str, 
-      sizeof( cctx->thread_names[api_id][thread_id] ) );
       break;
     
     default:
