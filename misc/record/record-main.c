@@ -233,7 +233,7 @@ static void print_item( client_context *cctx, const client_item *item )
         event_header_extended event_header_extended;
         FILE **f = cctx->event_streams;
         
-        size_t api_id = ( ( cctx->switch_out_int[ item->cpu ].out_data >> 24 ) & 0x7 );
+        size_t api_id = ( ( cctx->switch_out_int[ item->cpu ].out_data >> 24 ) & 0x7 ) - 1;
         size_t thread_id = ( cctx->switch_out_int[ item->cpu ].out_data & 0xffff );
 
         // prev_* values
@@ -247,7 +247,7 @@ static void print_item( client_context *cctx, const client_item *item )
         switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
 
         // next_* values
-        api_id = ( ( cctx->switch_out_int[ item->cpu ].in_data >> 24 ) & 0x7 );
+        api_id = ( ( cctx->switch_out_int[ item->cpu ].in_data >> 24 ) & 0x7 ) - 1;
         thread_id = ( cctx->switch_out_int[ item->cpu ].in_data & 0xffff );
 
         memcpy( switch_event.next_comm, cctx->thread_names[ api_id ][ thread_id ], 
@@ -280,8 +280,7 @@ static void print_item( client_context *cctx, const client_item *item )
       ;
 
       if( cctx->thread_id_name[ item->cpu ].name_index == 0 ){
-        size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 );
-        assert( api_id < 3 );
+        size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 ) - 1;
         size_t thread_id = ( cctx->thread_id_name[ item->cpu ].thread_id & 0xffff );
         uint64_t thread_name = item->data;
         
@@ -297,7 +296,7 @@ static void print_item( client_context *cctx, const client_item *item )
 
         cctx->thread_id_name[ item->cpu ].name_index++;
       }else if( cctx->thread_id_name[ item->cpu ].name_index == 1){
-        size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 );
+        size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 ) - 1;
         size_t thread_id = ( cctx->thread_id_name[ item->cpu ].thread_id & 0xffff );
         uint64_t thread_name = item->data;
 
