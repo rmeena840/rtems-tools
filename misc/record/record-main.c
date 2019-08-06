@@ -116,6 +116,7 @@ typedef struct switch_out_int{
 
 typedef struct thread_id_name{
   uint64_t thread_id;
+  size_t name_index;
 } thread_id_name;
 
 typedef struct client_context {
@@ -267,20 +268,40 @@ static void print_item( client_context *cctx, const client_item *item )
       break;
     case RTEMS_RECORD_THREAD_ID:
       cctx->thread_id_name[ item->cpu ].thread_id = item->data;
+      cctx->thread_id_name[ item->cpu ].name_index = 0;
       break;
     case RTEMS_RECORD_THREAD_NAME:
       ;
-      size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 );
-      size_t thread_id = ( cctx->thread_id_name[ item->cpu ].thread_id & 0xffff );
-      uint64_t thread_name = item->data;
 
-      size_t i = 0;
+      if( cctx->thread_id_name[ item->cpu ].name_index == 0 ){
+        size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 );
+        size_t thread_id = ( cctx->thread_id_name[ item->cpu ].thread_id & 0xffff );
+        uint64_t thread_name = item->data;
+        
+        memset( cctx->thread_names[ api_id ][ thread_id ], 0, 
+        sizeof(cctx->thread_names[ api_id ][ thread_id ]));
 
-      for( i = 0; i < THREAD_NAME_SIZE - 1; i++ ){
-        if( cctx->thread_names[ api_id ][ thread_id ][ i ] == 0x00 ){
-          cctx->thread_names[ api_id ][ thread_id ][ i ] = ( thread_name  & 0xff );
-          thread_name = ( thread_name >> 8 );
+        size_t i = 0;
+
+        for( i = 0; i <= 7; i++ ){
+            cctx->thread_names[ api_id ][ thread_id ][ i ] = ( thread_name  & 0xff );
+            thread_name = ( thread_name >> 8 );
         }
+
+        cctx->thread_id_name[ item->cpu ].name_index++;
+      }else if( cctx->thread_id_name[ item->cpu ].name_index == 1){
+        size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 );
+        size_t thread_id = ( cctx->thread_id_name[ item->cpu ].thread_id & 0xffff );
+        uint64_t thread_name = item->data;
+
+        size_t i = 0;
+
+        for( i = 8; i <= 15; i++ ){
+            cctx->thread_names[ api_id ][ thread_id ][ i ] = ( thread_name  & 0xff );
+            thread_name = ( thread_name >> 8 );
+        }
+
+        cctx->thread_id_name[ item->cpu ].name_index = 0;
       }
       break;
     
