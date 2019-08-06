@@ -275,6 +275,7 @@ static void print_item( client_context *cctx, const client_item *item )
 
       if( cctx->thread_id_name[ item->cpu ].name_index == 0 ){
         size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 );
+        assert( api_id < 3 );
         size_t thread_id = ( cctx->thread_id_name[ item->cpu ].thread_id & 0xffff );
         uint64_t thread_name = item->data;
         
