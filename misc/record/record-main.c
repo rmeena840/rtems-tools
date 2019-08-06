@@ -229,27 +229,33 @@ static void print_item( client_context *cctx, const client_item *item )
       // current timestamp equals record item timestamp than 
       // write it to corresponding CPU file
       if( item->ns == cctx->switch_out_int[ item->cpu ].ns){
-        char item_data_str[ 256 ];
         switch_event switch_event;
         event_header_extended event_header_extended;
         FILE **f = cctx->event_streams;
+        
+        size_t api_id = ( ( cctx->switch_out_int[ item->cpu ].out_data >> 24 ) & 0x7 );
+        size_t thread_id = ( cctx->switch_out_int[ item->cpu ].out_data & 0xffff );
 
         // prev_* values
-        snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, 
-        cctx->switch_out_int[ item->cpu ].out_data );
-        memcpy( switch_event.prev_comm, item_data_str, sizeof( switch_event.prev_comm ) );
+        memcpy( switch_event.prev_comm, cctx->thread_names[ api_id ][ thread_id ], 
+        sizeof( switch_event.prev_comm ) );
+
         switch_event.prev_tid = cctx->switch_out_int[ item->cpu ].prev_state ==
         TASK_IDLE ? 0 : cctx->switch_out_int[ item->cpu ].out_data;
         switch_event.prev_prio = 0;
+
         switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
 
         // next_* values
-        snprintf( item_data_str, sizeof( item_data_str ), "%08"PRIx64, 
-        cctx->switch_out_int[ item->cpu ].in_data );
-        memcpy( switch_event.next_comm, item_data_str, sizeof( switch_event.next_comm ) );
+        api_id = ( ( cctx->switch_out_int[ item->cpu ].in_data >> 24 ) & 0x7 );
+        thread_id = ( cctx->switch_out_int[ item->cpu ].in_data & 0xffff );
+
+        memcpy( switch_event.next_comm, cctx->thread_names[ api_id ][ thread_id ], 
+        sizeof( switch_event.next_comm ) );
         // set to 0 if next thread is idle
         switch_event.next_tid = ( ( ( item->data >> 24 ) & 0x7 ) == 1 ) ? 0 : 
         cctx->switch_out_int[ item->cpu ].in_data;
+
         switch_event.next_prio = 0;
 
         event_header_extended.id = ( uint8_t ) 31; //points to extended struct of metadata
