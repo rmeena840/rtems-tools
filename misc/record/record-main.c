@@ -82,19 +82,19 @@ typedef struct ctf_packet_header {
 } __attribute__((__packed__)) ctf_packet_header;
 
 typedef struct ctf_packet_context {
-	uint64_t timestamp_begin;
-	uint64_t timestamp_end;
-  uint64_t content_size;
-	uint64_t packet_size;
-  uint64_t packet_seq_num;
-	unsigned long events_discarded;
-	uint32_t cpu_id;
+	uint64_t                     timestamp_begin;
+	uint64_t                     timestamp_end;
+  uint64_t                     content_size;
+	uint64_t                     packet_size;
+  uint64_t                     packet_seq_num;
+	unsigned long                events_discarded;
+	uint32_t                     cpu_id;
 } __attribute__((__packed__)) ctf_packet_context;
 
 typedef struct event_header_extended {
-  uint8_t  id;
-  uint32_t event_id;
-  uint64_t ns;
+  uint8_t                      id;
+  uint32_t                     event_id;
+  uint64_t                     ns;
 } __attribute__((__packed__)) event_header_extended;
 
 typedef struct switch_event{
@@ -115,8 +115,8 @@ typedef struct switch_out_int{
 } __attribute__((__packed__)) switch_out_int;
 
 typedef struct thread_id_name{
-  uint64_t thread_id;
-  size_t name_index;
+  uint64_t                     thread_id;
+  size_t                       name_index;
 } thread_id_name;
 
 typedef struct client_context {
@@ -128,20 +128,20 @@ typedef struct client_context {
   uint64_t                       counter;
   SLIST_HEAD( , client_item )    free_items;
   RB_HEAD( active, client_item ) active_items;
-  FILE               *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+  FILE                *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t            timestamp_begin[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 	uint64_t            timestamp_end[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t            content_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t            packet_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   switch_out_int      switch_out_int[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
-
+  thread_id_name      thread_id_name[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   /**
    * @brief Thread names indexed by API and object index.
    * 
    * The API indices are 0 for Internal API, 1 for Classic API and 2 for POSIX API.
    */
   char thread_names[ 3 ][ 65536 ][ THREAD_NAME_SIZE] ;
-  thread_id_name thread_id_name[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+
 } client_context;
 
 static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
@@ -195,11 +195,11 @@ const char *input_file, bool input_file_flag )
   socket( PF_INET, SOCK_STREAM, 0 ); 
   assert( fd >= 0 );   
   
-
   memset( &in_addr, 0, sizeof( in_addr ) );
   in_addr.sin_family = AF_INET;
   in_addr.sin_port = htons( port );
   in_addr.sin_addr.s_addr = inet_addr( host );
+
   if( !input_file_flag ){
     rv = connect( fd, (struct sockaddr *) &in_addr, sizeof( in_addr ) );
     assert( rv == 0 );
@@ -224,11 +224,10 @@ static void print_item( client_context *cctx, const client_item *item )
       ( ( ( item->data >> 24 ) & 0x7 ) == 1 ) ? TASK_IDLE : TASK_RUNNING;
       break;
     case RTEMS_RECORD_THREAD_SWITCH_IN:
-      cctx->switch_out_int[ item->cpu ].in_data = item->data;
 
       // current timestamp equals record item timestamp than 
       // write it to corresponding CPU file
-      if( item->ns == cctx->switch_out_int[ item->cpu ].ns){
+      if( item->ns == cctx->switch_out_int[ item->cpu ].ns ){
         switch_event switch_event;
         event_header_extended event_header_extended;
         FILE **f = cctx->event_streams;
@@ -247,20 +246,20 @@ static void print_item( client_context *cctx, const client_item *item )
         switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
 
         // next_* values
-        api_id = ( ( cctx->switch_out_int[ item->cpu ].in_data >> 24 ) & 0x7 ) - 1;
-        thread_id = ( cctx->switch_out_int[ item->cpu ].in_data & 0xffff );
+        api_id = ( ( item->data >> 24 ) & 0x7 ) - 1;
+        thread_id = ( item->data & 0xffff );
 
         memcpy( switch_event.next_comm, cctx->thread_names[ api_id ][ thread_id ], 
         sizeof( switch_event.next_comm ) );
         // set to 0 if next thread is idle
         switch_event.next_tid = ( ( ( item->data >> 24 ) & 0x7 ) == 1 ) ? 0 : 
-        cctx->switch_out_int[ item->cpu ].in_data;
+        item->data;
 
         switch_event.next_prio = 0;
 
-        event_header_extended.id = ( uint8_t ) 31; //points to extended struct of metadata
-        event_header_extended.event_id = ( uint32_t ) 0; // points to event_id of metadata
-        event_header_extended.ns = ( uint64_t ) item->ns; // timestamp value
+        event_header_extended.id = 31; //points to extended struct of metadata
+        event_header_extended.event_id = 0; // points to event_id of metadata
+        event_header_extended.ns = item->ns; // timestamp value
 
         cctx->content_size[ item->cpu ] += sizeof( event_header_extended ) * 8; 
         cctx->packet_size[ item->cpu ] += sizeof( event_header_extended ) * 8;
@@ -503,33 +502,9 @@ int main( int argc, char **argv )
 
     event_streams[ i ] = fopen( filename , "wb" );
 
-    ctf_packet_header.ctf_magic = CTF_MAGIC;
-    ctf_packet_header.stream_id = ( uint32_t ) 0;
-    ctf_packet_header.stream_instance_id = ( uint64_t ) i;
-
-    // Add dummy data at the begining of file so that later only this part
-    // can be overwritten
-    ctf_packet_context.timestamp_begin = ( uint64_t ) 0;
-    ctf_packet_context.timestamp_end = ( uint64_t ) 0;
-    ctf_packet_context.content_size = ( uint64_t ) 0;
-    ctf_packet_context.packet_size = ( uint64_t ) 0;
-    ctf_packet_context.cpu_id = ( uint32_t ) i;
-    ctf_packet_context.packet_seq_num = ( uint64_t ) 0;
-    ctf_packet_context.events_discarded = ( uint64_t ) 0;
-
-    // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
-    // to be added the very begining of each stream file
+    // packet.header and packet.context of metadata
     fwrite( &ctf_packet_header, sizeof( ctf_packet_header ), 1, event_streams[ i ] );
-
-    //wrting packet context just after packet header
     fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1, event_streams[ i ] );
-
-    //initializing equal timestamp values per CPU 
-    cctx.timestamp_begin[ i ] = ( uint64_t ) 0;
-    cctx.timestamp_end[ i ] = ( uint64_t ) 0;
-    
-    cctx.content_size[ i ] = ( uint64_t ) 0;
-    cctx.packet_size[ i ] = ( uint64_t ) 0;
 
     assert( event_streams[ i ] != NULL );
     cctx.event_streams[ i ] = event_streams[ i ];
@@ -559,36 +534,34 @@ int main( int argc, char **argv )
 
   }
 
-  // It will overwrite the packet.header and packet.context only at the 
-  // beginning and won't overwirte the rest data.
+  // overwrite packet_header and packet_context at the begining of each CPU file
   for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ) {
     fseek( event_streams[ i ], 0, SEEK_SET );
 
+    size_t packet_header_context_size = ( sizeof( ctf_packet_header ) + 
+    sizeof( ctf_packet_context ) ) * 8;
+
     ctf_packet_header.ctf_magic = CTF_MAGIC;
-    ctf_packet_header.stream_id = ( uint32_t ) 0;
-    ctf_packet_header.stream_instance_id = ( uint64_t ) i;
+    ctf_packet_header.stream_id = 0;
+    ctf_packet_header.stream_instance_id = i;
 
     // Replacing the dummy data with actual values.
-    ctf_packet_context.timestamp_begin = ( uint64_t ) cctx.timestamp_begin[ i ];
-    ctf_packet_context.timestamp_end = ( uint64_t ) cctx.timestamp_end[ i ];
+    ctf_packet_context.timestamp_begin =  cctx.timestamp_begin[ i ];
+    ctf_packet_context.timestamp_end = cctx.timestamp_end[ i ];
     
-    //content_size and packet_size includes all headers and event sizes in bits
-    //There is no padding in native binary stream files so both should be equal
-    ctf_packet_context.content_size = ( uint64_t ) cctx.content_size[ i ] + 
-    ( sizeof( ctf_packet_header ) + sizeof( ctf_packet_context ) ) * 8;
-    ctf_packet_context.packet_size = ( uint64_t ) cctx.packet_size[ i ] +
-    ( sizeof( ctf_packet_header ) + sizeof( ctf_packet_context ) ) * 8;
+    // content_size and packet_size includes all headers and event sizes in bits
+    // There is no padding in native binary stream files so both should be equal
+    ctf_packet_context.content_size = cctx.content_size[ i ] + 
+    packet_header_context_size;
+    ctf_packet_context.packet_size = cctx.packet_size[ i ] + 
+    packet_header_context_size;
 
-    ctf_packet_context.packet_seq_num = ( uint64_t ) 0;
-    ctf_packet_context.events_discarded = ( uint64_t ) 0;
+    ctf_packet_context.packet_seq_num = 0;
+    ctf_packet_context.events_discarded = 0;
+    ctf_packet_context.cpu_id = i;
 
-    ctf_packet_context.cpu_id = ( uint32_t ) i;
-
-    // CTF magic, uuid, stream_id = 0 and cpu_id of each file. It is needed 
-    // to be added the very begining of each stream file
+    // packet.header and packet.context of metadata
     fwrite( &ctf_packet_header, sizeof( ctf_packet_header ), 1, event_streams[ i ] );
-
-    //wrting packet context just after packet header
     fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1, event_streams[ i ] );
 
     fclose( event_streams[ i ] );
