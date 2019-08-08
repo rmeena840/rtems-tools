@@ -516,20 +516,13 @@ static const char metadata[] =
 "\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_tid;\n"
 "\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_prio;\n"
 "\t};\n"
-"};\n"
-"\n"
+"};"
 ;
-
-typedef struct meta {
-  char metadata[2610];  
-} __attribute__((__packed__)) meta;
 
 void generate_metadata(){
   FILE *file = fopen("metadata","w");
   assert( file !=  NULL );
-  meta meta;
-  memcpy( meta.metadata, metadata, sizeof(meta.metadata) );
-  fwrite( &meta, sizeof( meta ), 1, file );
+  fwrite( metadata, sizeof( metadata ) - 1, 1, file );
   fclose( file );
 }
 
