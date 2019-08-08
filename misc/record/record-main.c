@@ -82,6 +82,7 @@ typedef struct ctf_packet_header {
 } __attribute__((__packed__)) ctf_packet_header;
 
 typedef struct ctf_packet_context {
+  ctf_packet_header            ctf_packet_header;
 	uint64_t                     timestamp_begin;
 	uint64_t                     timestamp_end;
   uint64_t                     content_size;
@@ -98,6 +99,7 @@ typedef struct event_header_extended {
 } __attribute__((__packed__)) event_header_extended;
 
 typedef struct switch_event{
+  event_header_extended        event_header_extended;
   uint8_t                      prev_comm[ THREAD_NAME_SIZE ];
   int32_t                      prev_tid;
   int32_t                      prev_prio;
@@ -207,6 +209,14 @@ const char *input_file, bool input_file_flag )
   return fd;
 }
 
+static size_t get_api_id( uint64_t thread ){
+  return ( ( thread >> 24 ) & 0x7 );
+}
+
+static size_t get_thread_id( uint64_t thread ){
+  return ( thread & 0xffff );
+}
+
 static void print_item( client_context *cctx, const client_item *item )
 {
 
@@ -228,11 +238,9 @@ static void print_item( client_context *cctx, const client_item *item )
       // write it to corresponding CPU file
       if( item->ns == cctx->switch_out_int[ item->cpu ].ns ){
         switch_event switch_event;
-        event_header_extended event_header_extended;
         FILE **f = cctx->event_streams;
-        
-        size_t api_id = ( ( cctx->switch_out_int[ item->cpu ].out_data >> 24 ) & 0x7 ) - 1;
-        size_t thread_id = ( cctx->switch_out_int[ item->cpu ].out_data & 0xffff );
+        size_t api_id = get_api_id( cctx->switch_out_int[ item->cpu ].out_data ) - 1;
+        size_t thread_id = get_thread_id( cctx->switch_out_int[ item->cpu ].out_data );
 
         // prev_* values
         memcpy( switch_event.prev_comm, cctx->thread_names[ api_id ][ thread_id ], 
@@ -245,8 +253,8 @@ static void print_item( client_context *cctx, const client_item *item )
         switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
 
         // next_* values
-        api_id = ( ( item->data >> 24 ) & 0x7 ) - 1;
-        thread_id = ( item->data & 0xffff );
+        api_id = get_api_id( item->data )- 1;
+        thread_id = get_thread_id( item->data );
 
         memcpy( switch_event.next_comm, cctx->thread_names[ api_id ][ thread_id ], 
         sizeof( switch_event.next_comm ) );
@@ -256,17 +264,13 @@ static void print_item( client_context *cctx, const client_item *item )
 
         switch_event.next_prio = 0;
 
-        event_header_extended.id = 31; //points to extended struct of metadata
-        event_header_extended.event_id = 0; // points to event_id of metadata
-        event_header_extended.ns = item->ns; // timestamp value
-
-        cctx->content_size[ item->cpu ] += sizeof( event_header_extended ) * 8; 
-        cctx->packet_size[ item->cpu ] += sizeof( event_header_extended ) * 8;
+        switch_event.event_header_extended.id = 31; //points to extended struct of metadata
+        switch_event.event_header_extended.event_id = 0; // points to event_id of metadata
+        switch_event.event_header_extended.ns = item->ns; // timestamp value
 
         cctx->content_size[ item->cpu ] += sizeof( switch_event ) * 8; 
         cctx->packet_size[ item->cpu] += sizeof( switch_event ) * 8;
           
-        fwrite( &event_header_extended, sizeof( event_header_extended ), 1, f[ item->cpu ] );
         fwrite( &switch_event, sizeof( switch_event ), 1, f[ item->cpu ] );
       }
       break;
@@ -278,8 +282,8 @@ static void print_item( client_context *cctx, const client_item *item )
       ;
 
       if( cctx->thread_id_name[ item->cpu ].name_index == 0 ){
-        size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 ) - 1;
-        size_t thread_id = ( cctx->thread_id_name[ item->cpu ].thread_id & 0xffff );
+        size_t api_id = get_api_id( cctx->thread_id_name[ item->cpu ].thread_id ) - 1;
+        size_t thread_id = get_thread_id( cctx->thread_id_name[ item->cpu ].thread_id );
         uint64_t thread_name = item->data;
         
         memset( cctx->thread_names[ api_id ][ thread_id ], 0, 
@@ -294,8 +298,8 @@ static void print_item( client_context *cctx, const client_item *item )
 
         cctx->thread_id_name[ item->cpu ].name_index++;
       }else if( cctx->thread_id_name[ item->cpu ].name_index == 1){
-        size_t api_id = ( ( cctx->thread_id_name[ item->cpu ].thread_id >> 24 ) & 0x7 ) - 1;
-        size_t thread_id = ( cctx->thread_id_name[ item->cpu ].thread_id & 0xffff );
+        size_t api_id = get_api_id( cctx->thread_id_name[ item->cpu ].thread_id ) - 1;
+        size_t thread_id = get_thread_id( cctx->thread_id_name[ item->cpu ].thread_id );
         uint64_t thread_name = item->data;
 
         size_t i = 0;
@@ -531,7 +535,6 @@ int main( int argc, char **argv )
   rtems_record_client_context ctx;
   client_context cctx;
   client_item *items;
-  ctf_packet_header ctf_packet_header;
   ctf_packet_context ctf_packet_context;
   const char *host;
   uint16_t port;
@@ -593,7 +596,8 @@ int main( int argc, char **argv )
   SLIST_INIT( &cctx.free_items );
   RB_INIT( &cctx.active_items );
 
-  memcpy( ctf_packet_header.uuid, uuid, sizeof( ctf_packet_header.uuid ) );
+  memcpy( ctf_packet_context.ctf_packet_header.uuid, uuid, 
+  sizeof( ctf_packet_context.ctf_packet_header.uuid ) );
 
   generate_metadata();
 
@@ -608,7 +612,6 @@ int main( int argc, char **argv )
     event_streams[ i ] = fopen( filename , "wb" );
 
     // packet.header and packet.context of metadata
-    fwrite( &ctf_packet_header, sizeof( ctf_packet_header ), 1, event_streams[ i ] );
     fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1, event_streams[ i ] );
 
     assert( event_streams[ i ] != NULL );
@@ -643,12 +646,9 @@ int main( int argc, char **argv )
   for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ; i++ ) {
     fseek( event_streams[ i ], 0, SEEK_SET );
 
-    size_t packet_header_context_size = ( sizeof( ctf_packet_header ) + 
-    sizeof( ctf_packet_context ) ) * 8;
-
-    ctf_packet_header.ctf_magic = CTF_MAGIC;
-    ctf_packet_header.stream_id = 0;
-    ctf_packet_header.stream_instance_id = i;
+    ctf_packet_context.ctf_packet_header.ctf_magic = CTF_MAGIC;
+    ctf_packet_context.ctf_packet_header.stream_id = 0;
+    ctf_packet_context.ctf_packet_header.stream_instance_id = i;
 
     // Replacing the dummy data with actual values.
     ctf_packet_context.timestamp_begin =  cctx.timestamp_begin[ i ];
@@ -657,20 +657,17 @@ int main( int argc, char **argv )
     // content_size and packet_size includes all headers and event sizes in bits
     // There is no padding in native binary stream files so both should be equal
     ctf_packet_context.content_size = cctx.content_size[ i ] + 
-    packet_header_context_size;
+    sizeof( ctf_packet_context ) * 8;
     ctf_packet_context.packet_size = cctx.packet_size[ i ] + 
-    packet_header_context_size;
+    sizeof( ctf_packet_context ) * 8;
 
     ctf_packet_context.packet_seq_num = 0;
     ctf_packet_context.events_discarded = 0;
     ctf_packet_context.cpu_id = i;
 
     // packet.header and packet.context of metadata
-    fwrite( &ctf_packet_header, sizeof( ctf_packet_header ), 1, event_streams[ i ] );
     fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1, event_streams[ i ] );
-
     fclose( event_streams[ i ] );
-
   }
 
   rv = close( fd );
