@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (C) 2018, 2019 embedded brains GmbH
+ * Copyright (c) 2019 Ravindra Kumar Meena <rmeena840@gmail.com>. All rights
+ * reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
