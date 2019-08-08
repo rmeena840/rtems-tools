@@ -219,6 +219,46 @@ static size_t get_thread_id( uint64_t thread ){
   return ( thread & 0xffff );
 }
 
+void write_sched_switch( client_context *cctx, const client_item *item ){
+  switch_event switch_event;
+  FILE **f = cctx->event_streams;
+
+  size_t api_id = get_api_id( cctx->switch_out_int[ item->cpu ].out_data ) - 1;
+  size_t thread_id = get_thread_id( cctx->switch_out_int[ item->cpu ].out_data );
+
+  // prev_* values
+  memcpy( switch_event.prev_comm, cctx->thread_names[ api_id ][ thread_id ], 
+  sizeof( switch_event.prev_comm ) );
+
+  switch_event.prev_tid = cctx->switch_out_int[ item->cpu ].prev_state ==
+  TASK_IDLE ? 0 : cctx->switch_out_int[ item->cpu ].out_data;
+  switch_event.prev_prio = 0;
+
+  switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
+
+  // next_* values
+  api_id = get_api_id( item->data )- 1;
+  thread_id = get_thread_id( item->data );
+
+  memcpy( switch_event.next_comm, cctx->thread_names[ api_id ][ thread_id ], 
+  sizeof( switch_event.next_comm ) );
+  // set to 0 if next thread is idle
+  switch_event.next_tid = ( get_api_id( item->data ) == 1 ) ? 0 : 
+  item->data;
+
+  switch_event.next_prio = 0;
+
+  switch_event.event_header_extended.id = 31; //points to extended struct of metadata
+  switch_event.event_header_extended.event_id = 0; // points to event_id of metadata
+  switch_event.event_header_extended.ns = item->ns; // timestamp value
+
+  cctx->content_size[ item->cpu ] += sizeof( switch_event ) * 8; 
+  cctx->packet_size[ item->cpu] += sizeof( switch_event ) * 8;
+    
+  fwrite( &switch_event, sizeof( switch_event ), 1, f[ item->cpu ] );
+
+}
+
 static void print_item( client_context *cctx, const client_item *item )
 {
 
@@ -235,46 +275,10 @@ static void print_item( client_context *cctx, const client_item *item )
       ( ( ( item->data >> 24 ) & 0x7 ) == 1 ) ? TASK_IDLE : TASK_RUNNING;
       break;
     case RTEMS_RECORD_THREAD_SWITCH_IN:
-
-      // current timestamp equals record item timestamp than 
-      // write it to corresponding CPU file
-      if( item->ns == cctx->switch_out_int[ item->cpu ].ns ){
-        switch_event switch_event;
-        FILE **f = cctx->event_streams;
-        size_t api_id = get_api_id( cctx->switch_out_int[ item->cpu ].out_data ) - 1;
-        size_t thread_id = get_thread_id( cctx->switch_out_int[ item->cpu ].out_data );
-
-        // prev_* values
-        memcpy( switch_event.prev_comm, cctx->thread_names[ api_id ][ thread_id ], 
-        sizeof( switch_event.prev_comm ) );
-
-        switch_event.prev_tid = cctx->switch_out_int[ item->cpu ].prev_state ==
-        TASK_IDLE ? 0 : cctx->switch_out_int[ item->cpu ].out_data;
-        switch_event.prev_prio = 0;
-
-        switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
-
-        // next_* values
-        api_id = get_api_id( item->data )- 1;
-        thread_id = get_thread_id( item->data );
-
-        memcpy( switch_event.next_comm, cctx->thread_names[ api_id ][ thread_id ], 
-        sizeof( switch_event.next_comm ) );
-        // set to 0 if next thread is idle
-        switch_event.next_tid = ( ( ( item->data >> 24 ) & 0x7 ) == 1 ) ? 0 : 
-        item->data;
-
-        switch_event.next_prio = 0;
-
-        switch_event.event_header_extended.id = 31; //points to extended struct of metadata
-        switch_event.event_header_extended.event_id = 0; // points to event_id of metadata
-        switch_event.event_header_extended.ns = item->ns; // timestamp value
-
-        cctx->content_size[ item->cpu ] += sizeof( switch_event ) * 8; 
-        cctx->packet_size[ item->cpu] += sizeof( switch_event ) * 8;
-          
-        fwrite( &switch_event, sizeof( switch_event ), 1, f[ item->cpu ] );
-      }
+      // current timestamp equals record item timestamp than write it to  
+      // corresponding CPU file
+      if( item->ns == cctx->switch_out_int[ item->cpu ].ns )
+        write_sched_switch( cctx, item );
       break;
     case RTEMS_RECORD_THREAD_ID:
       cctx->thread_id_name[ item->cpu ].thread_id = item->data;
@@ -282,37 +286,23 @@ static void print_item( client_context *cctx, const client_item *item )
       break;
     case RTEMS_RECORD_THREAD_NAME:
       ;
+      if( cctx->thread_id_name[ item->cpu ].name_index > 1 ) break;
 
-      if( cctx->thread_id_name[ item->cpu ].name_index == 0 ){
-        size_t api_id = get_api_id( cctx->thread_id_name[ item->cpu ].thread_id ) - 1;
-        size_t thread_id = get_thread_id( cctx->thread_id_name[ item->cpu ].thread_id );
-        uint64_t thread_name = item->data;
-        
-        memset( cctx->thread_names[ api_id ][ thread_id ], 0, 
-        sizeof(cctx->thread_names[ api_id ][ thread_id ]));
+      size_t api_id = get_api_id( cctx->thread_id_name[ item->cpu ].thread_id ) - 1;
+      size_t thread_id = get_thread_id( cctx->thread_id_name[ item->cpu ].thread_id );
+      uint64_t thread_name = item->data;
 
-        size_t i = 0;
+      size_t i = cctx->thread_id_name[ item->cpu ].name_index == 0 ? 0 :
+      THREAD_NAME_SIZE/2;
+      size_t j = cctx->thread_id_name[ item->cpu ].name_index == 0 ? 
+      THREAD_NAME_SIZE/2 : THREAD_NAME_SIZE;
 
-        for( i = 0; i <= 7; i++ ){
-            cctx->thread_names[ api_id ][ thread_id ][ i ] = ( thread_name  & 0xff );
-            thread_name = ( thread_name >> 8 );
-        }
-
-        cctx->thread_id_name[ item->cpu ].name_index++;
-      }else if( cctx->thread_id_name[ item->cpu ].name_index == 1){
-        size_t api_id = get_api_id( cctx->thread_id_name[ item->cpu ].thread_id ) - 1;
-        size_t thread_id = get_thread_id( cctx->thread_id_name[ item->cpu ].thread_id );
-        uint64_t thread_name = item->data;
-
-        size_t i = 0;
-
-        for( i = 8; i <= 15; i++ ){
-            cctx->thread_names[ api_id ][ thread_id ][ i ] = ( thread_name  & 0xff );
-            thread_name = ( thread_name >> 8 );
-        }
-
-        cctx->thread_id_name[ item->cpu ].name_index++;
+      for( i = 0; i < j ; i++ ){
+        cctx->thread_names[ api_id ][ thread_id ][ i ] = ( thread_name  & 0xff );
+        thread_name = ( thread_name >> 8 );
       }
+
+      cctx->thread_id_name[ item->cpu ].name_index++;
       break;
     
     default:
