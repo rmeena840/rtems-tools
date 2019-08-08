@@ -430,109 +430,100 @@ static const char metadata[] =
 "typealias integer { size = 32; align = 8; signed = false; } := uint32_t;\n"
 "typealias integer { size = 64; align = 8; signed = false; } := uint64_t;\n"
 "typealias integer { size = 64; align = 8; signed = false; } := unsigned long;\n"
-"\n";
+"\n"
+"trace {\n"
+"\tmajor = 1;\n"
+"\tminor = 8;\n"
+"\tuuid = \"6a7715d0-b502-4c65-8678-6777ac7f755a\";\n"
+"\tbyte_order = le;\n"
+"\tpacket.header := struct {\n"
+"\t\tuint32_t magic;\n"
+"\t\tuint8_t  uuid[16];\n"
+"\t\tuint32_t stream_id;\n"
+"\t\tuint64_t stream_instance_id;\n"
+"\t};\n"
+"};\n"
+"\n"
+"env {\n"
+"\thostname = \"Record_Item\";\n"
+"\tdomain = \"kernel\";\n"
+"\tsysname = \"Linux\";\n"
+"\tkernel_release = \"4.18.14-arch1-1-ARCH\";\n"
+"\tkernel_version = \"#1 SMP PREEMPT Sat Thu 17 13:42:37 UTC 2019\";\n"
+"\ttracer_name = \"lttng-modules\";\n"
+"\ttracer_major = 2;\n"
+"\ttracer_minor = 11;\n"
+"\ttracer_patchlevel = 0;\n"
+"};\n"
+"\n"
+"clock {\n"
+"\tname = \"monotonic\";\n"
+"\tuuid = \"234d669d-7651-4bc1-a7fd-af581ecc6232\";\n"
+"\tdescription = \"Monotonic Clock\";\n"
+"\tfreq = 1000000000;\n"
+"\toffset = 1539783991179109789;\n"
+"};\n"
+"\n"
+"typealias integer {\n"
+"\tsize = 27; align = 1; signed = false;\n"
+"\tmap = clock.monotonic.value;\n"
+"} := uint27_clock_monotonic_t;\n"
+"\n"
+"typealias integer {\n"
+"\tsize = 64; align = 8; signed = false;\n"
+"\tmap = clock.monotonic.value;\n"
+"} := uint64_clock_monotonic_t;\n"
+"\n"
+"struct packet_context {\n"
+"\tuint64_clock_monotonic_t timestamp_begin;\n"
+"\tuint64_clock_monotonic_t timestamp_end;\n"
+"\tuint64_t content_size;\n"
+"\tuint64_t packet_size;\n"
+"\tuint64_t packet_seq_num;\n"
+"\tunsigned long events_discarded;\n"
+"\tuint32_t cpu_id;\n"
+"};\n"
+"\n"
+"struct event_header_compact {\n"
+"\tenum : uint5_t { compact = 0 ... 30, extended = 31 } id;\n"
+"\tvariant <id> {\n"
+"\t\tstruct {\n"
+"\t\t\tuint27_clock_monotonic_t timestamp;\n"
+"\t\t} compact;\n"
+"\t\tstruct {\n"
+"\t\t\tuint32_t id;\n"
+"\t\t\tuint64_clock_monotonic_t timestamp;\n"
+"\t\t} extended;\n"
+"\t} v;\n"
+"} align(8);\n"
+"\n"
+"stream {\n"
+"\tid = 0;\n"
+"\tevent.header := struct event_header_compact;\n"
+"\tpacket.context := struct packet_context;\n"
+"};\n"
+"\n"
+"event {\n"
+"\tname = \"sched_switch\";\n"
+"\tid = 0;\n"
+"\tstream_id = 0;\n"
+"\tfields := struct {\n"
+"\t\tinteger { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10;} _prev_comm[16];\n"
+"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_tid;\n"
+"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_prio;\n"
+"\t\tinteger { size = 64; align = 8; signed = 1; encoding = none; base = 10; } _prev_state;\n"
+"\t\tinteger { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10; } _next_comm[16];\n"
+"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_tid;\n"
+"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_prio;\n"
+"\t};\n"
+"};"
+;
 
 void generate_metadata(){
   FILE *file = fopen("metadata","w");
   assert( file !=  NULL );
-
   fwrite( metadata, sizeof( metadata ), 1, file );
-
-  fprintf(file, "trace {\
-  \n\tmajor = 1;\
-  \n\tminor = 8;\
-  \n\tuuid = \"6a7715d0-b502-4c65-8678-6777ac7f755a\";\
-  \n\tbyte_order = le;\
-  \n\tpacket.header := struct {\
-  \n\t\tuint32_t magic;\
-  \n\t\tuint8_t  uuid[16];\
-  \n\t\tuint32_t stream_id;\
-  \n\t\tuint64_t stream_instance_id;\
-  \n\t};\
-  \n};\n\n");
-
-  fprintf(file, "env {\
-  \n\thostname = \"Record_Item\";\
-  \n\tdomain = \"kernel\";\
-  \n\tsysname = \"Linux\";\
-  \n\tkernel_release = \"4.18.14-arch1-1-ARCH\";\
-  \n\tkernel_version = \"#1 SMP PREEMPT Sat Thu 17 13:42:37 UTC 2019\";\
-  \n\ttracer_name = \"lttng-modules\";\
-  \n\ttracer_major = 2;\
-  \n\ttracer_minor = 11;\
-  \n\ttracer_patchlevel = 0;\
-  \n};\n\n");
-
-  fprintf(file, "clock {\
-  \n\tname = \"monotonic\";\
-  \n\tuuid = \"234d669d-7651-4bc1-a7fd-af581ecc6232\";\
-  \n\tdescription = \"Monotonic Clock\";\
-  \n\tfreq = 1000000000;\
-  \n\toffset = 1539783991179109789;\
-  \n};\n\n");
-
-  fprintf(file, "typealias integer {\
-  \n\tsize = 27; align = 1; signed = false;\
-  \n\tmap = clock.monotonic.value;\
-  \n} := uint27_clock_monotonic_t;\
-  \n\n");
-
-  fprintf(file, "typealias integer {\
-  \n\tsize = 64; align = 8; signed = false;\
-  \n\tmap = clock.monotonic.value;\
-  \n} := uint64_clock_monotonic_t;\
-  \n\n");
-
-  fprintf(file, "struct packet_context {\
-  \n\tuint64_clock_monotonic_t timestamp_begin;\
-  \n\tuint64_clock_monotonic_t timestamp_end;\
-  \n\tuint64_t content_size;\
-  \n\tuint64_t packet_size;\
-  \n\tuint64_t packet_seq_num;\
-  \n\tunsigned long events_discarded;\
-  \n\tuint32_t cpu_id;\
-  \n};\
-  \n\n");
-
-  fprintf(file, "struct event_header_compact {\
-  \n\tenum : uint5_t { compact = 0 ... 30, extended = 31 } id;\
-  \n\tvariant <id> {\
-  \n\t\tstruct {\
-  \n\t\t\tuint27_clock_monotonic_t timestamp;\
-  \n\t\t} compact;\
-  \n\t\tstruct {\
-  \n\t\t\tuint32_t id;\
-  \n\t\t\tuint64_clock_monotonic_t timestamp;\
-  \n\t\t} extended;\
-  \n\t} v;\
-  \n} align(8);\
-  \n\n");
-
-  fprintf(file, "stream {\
-  \n\tid = 0;\
-  \n\tevent.header := struct event_header_compact;\
-  \n\tpacket.context := struct packet_context;\
-  \n};\
-  \n\n");
-
-  fprintf(file, "event {\
-  \n\tname = \"sched_switch\";\
-  \n\tid = 0;\
-  \n\tstream_id = 0;\
-  \n\tfields := struct {\
-  \n\t\tinteger { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10;} _prev_comm[16];\
-  \n\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_tid;\
-  \n\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_prio;\
-  \n\t\tinteger { size = 64; align = 8; signed = 1; encoding = none; base = 10; } _prev_state;\
-  \n\t\tinteger { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10; } _next_comm[16];\
-  \n\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_tid;\
-  \n\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_prio;\
-  \n\t};\
-  \n};\
-  \n");
-
   fclose( file );
-
 }
 
 int main( int argc, char **argv )
