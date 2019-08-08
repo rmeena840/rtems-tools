@@ -422,19 +422,23 @@ static rtems_record_client_status handler(
   return RTEMS_RECORD_CLIENT_SUCCESS;
 }
 
+static const char metadata[] = 
+"/* CTF 1.8 */\n"
+"\n"
+"typealias integer { size = 5; align = 1; signed = false; } := uint5_t;\n"
+"typealias integer { size = 8; align = 8; signed = false; } := uint8_t;\n"
+"typealias integer { size = 32; align = 8; signed = false; } := uint32_t;\n"
+"typealias integer { size = 64; align = 8; signed = false; } := uint64_t;\n"
+"typealias integer { size = 64; align = 8; signed = false; } := unsigned long;\n"
+"\n";
+
 void generate_metadata(){
-  FILE *metadata = fopen("metadata","w");
-  assert( metadata !=  NULL );
+  FILE *file = fopen("metadata","w");
+  assert( file !=  NULL );
 
-  fprintf(metadata, "/* CTF 1.8 */\n\n");
-  fprintf(metadata, "typealias integer { size = 5; align = 1; signed = false; } := uint5_t;\
-  \ntypealias integer { size = 8; align = 8; signed = false; } := uint8_t;\
-  \ntypealias integer { size = 32; align = 8; signed = false; } := uint32_t;\
-  \ntypealias integer { size = 64; align = 8; signed = false; } := uint64_t;\
-  \ntypealias integer { size = 64; align = 8; signed = false; } := unsigned long;\n\n"
-  );
+  fwrite( metadata, sizeof( metadata ), 1, file );
 
-  fprintf(metadata, "trace {\
+  fprintf(file, "trace {\
   \n\tmajor = 1;\
   \n\tminor = 8;\
   \n\tuuid = \"6a7715d0-b502-4c65-8678-6777ac7f755a\";\
@@ -447,7 +451,7 @@ void generate_metadata(){
   \n\t};\
   \n};\n\n");
 
-  fprintf(metadata, "env {\
+  fprintf(file, "env {\
   \n\thostname = \"Record_Item\";\
   \n\tdomain = \"kernel\";\
   \n\tsysname = \"Linux\";\
@@ -459,7 +463,7 @@ void generate_metadata(){
   \n\ttracer_patchlevel = 0;\
   \n};\n\n");
 
-  fprintf(metadata, "clock {\
+  fprintf(file, "clock {\
   \n\tname = \"monotonic\";\
   \n\tuuid = \"234d669d-7651-4bc1-a7fd-af581ecc6232\";\
   \n\tdescription = \"Monotonic Clock\";\
@@ -467,19 +471,19 @@ void generate_metadata(){
   \n\toffset = 1539783991179109789;\
   \n};\n\n");
 
-  fprintf(metadata, "typealias integer {\
+  fprintf(file, "typealias integer {\
   \n\tsize = 27; align = 1; signed = false;\
   \n\tmap = clock.monotonic.value;\
   \n} := uint27_clock_monotonic_t;\
   \n\n");
 
-  fprintf(metadata, "typealias integer {\
+  fprintf(file, "typealias integer {\
   \n\tsize = 64; align = 8; signed = false;\
   \n\tmap = clock.monotonic.value;\
   \n} := uint64_clock_monotonic_t;\
   \n\n");
 
-  fprintf(metadata, "struct packet_context {\
+  fprintf(file, "struct packet_context {\
   \n\tuint64_clock_monotonic_t timestamp_begin;\
   \n\tuint64_clock_monotonic_t timestamp_end;\
   \n\tuint64_t content_size;\
@@ -490,7 +494,7 @@ void generate_metadata(){
   \n};\
   \n\n");
 
-  fprintf(metadata, "struct event_header_compact {\
+  fprintf(file, "struct event_header_compact {\
   \n\tenum : uint5_t { compact = 0 ... 30, extended = 31 } id;\
   \n\tvariant <id> {\
   \n\t\tstruct {\
@@ -504,14 +508,14 @@ void generate_metadata(){
   \n} align(8);\
   \n\n");
 
-  fprintf(metadata, "stream {\
+  fprintf(file, "stream {\
   \n\tid = 0;\
   \n\tevent.header := struct event_header_compact;\
   \n\tpacket.context := struct packet_context;\
   \n};\
   \n\n");
 
-  fprintf(metadata, "event {\
+  fprintf(file, "event {\
   \n\tname = \"sched_switch\";\
   \n\tid = 0;\
   \n\tstream_id = 0;\
@@ -527,7 +531,7 @@ void generate_metadata(){
   \n};\
   \n");
 
-  fclose( metadata );
+  fclose( file );
 
 }
 
