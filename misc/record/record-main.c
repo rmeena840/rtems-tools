@@ -78,15 +78,15 @@ typedef struct client_item {
   uint64_t                     counter;
 } client_item;
 
-typedef struct ctf_packet_header {
+typedef struct packet_header {
   uint32_t                     ctf_magic;
   uint8_t                      uuid[ UUID_SIZE ];
   uint32_t                     stream_id;
   uint64_t                     stream_instance_id;
-} __attribute__((__packed__)) ctf_packet_header;
+} __attribute__((__packed__)) packet_header;
 
-typedef struct ctf_packet_context {
-  ctf_packet_header            ctf_packet_header;
+typedef struct packet_context {
+  packet_header                packet_header;
   uint64_t                     timestamp_begin;
   uint64_t                     timestamp_end;
   uint64_t                     content_size;
@@ -94,16 +94,16 @@ typedef struct ctf_packet_context {
   uint64_t                     packet_seq_num;
   unsigned long                events_discarded;
   uint32_t                     cpu_id;
-} __attribute__((__packed__)) ctf_packet_context;
+} __attribute__((__packed__)) packet_context;
 
-typedef struct event_header_extended {
+typedef struct event_header_compact {
   uint8_t                      id;
   uint32_t                     event_id;
   uint64_t                     ns;
-} __attribute__((__packed__)) event_header_extended;
+} __attribute__((__packed__)) event_header_compact;
 
-typedef struct switch_event {
-  event_header_extended        event_header_extended;
+typedef struct sched_switch {
+  event_header_compact         event_header_compact;
   uint8_t                      prev_comm[ THREAD_NAME_SIZE ];
   int32_t                      prev_tid;
   int32_t                      prev_prio;
@@ -111,7 +111,7 @@ typedef struct switch_event {
   uint8_t                      next_comm[ THREAD_NAME_SIZE ];
   int32_t                      next_tid;
   int32_t                      next_prio;
-} __attribute__((__packed__)) switch_event;
+} __attribute__((__packed__)) sched_switch;
 
 typedef struct thread_id_name {
   uint64_t                     thread_id;
@@ -133,7 +133,7 @@ typedef struct client_context {
   uint64_t          content_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t          packet_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   thread_id_name    thread_id_name[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
-  switch_event      switch_event[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+  sched_switch      sched_switch[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   /*
    * @brief Thread names indexed by API and object index.
    *
@@ -219,79 +219,90 @@ static size_t get_index_of_id( uint64_t id )
 
 static bool is_idle_task_by_api( size_t api )
 {
-   return api == 1;
+  return api == 1;
 }
 
 void write_sched_switch( client_context *cctx, const client_item *item )
 {
   FILE **f = cctx->event_streams;
-  size_t api_id = get_api_of_id( item->data );
+  sched_switch se = cctx->sched_switch[ item->cpu ];
+  event_header_compact *evt_head_name = &se.event_header_compact;
+  size_t sched_switch_size = sizeof( sched_switch ) * 8;
+  char *thd_name;
+  size_t api;
+  size_t index;
 
-  if( api_id > THREAD_API_SIZE || api_id == 0 ) {
+  api = get_api_of_id( item->data );
+  if( api > THREAD_API_SIZE || api == 0 ) {
     return;
   } else {
-    cctx->switch_event[ item->cpu ].next_tid = is_idle_task_by_api( api_id ) ?
-    0 : item->data;
-    api_id--;
+    se.next_tid = is_idle_task_by_api( api ) ? 0 : item->data;
+    api--;
   }
 
-  size_t thread_id = get_index_of_id( item->data );
-  if( thread_id > THREAD_ID_SIZE ) {
+  index = get_index_of_id( item->data );
+  if( index > THREAD_ID_SIZE ) {
     return;
   }
 
   /*
    * next_* values
    */
-  memcpy
-  (
-  cctx->switch_event[ item->cpu ].next_comm,
-  cctx->thread_names[ api_id ][ thread_id ],
-  sizeof( cctx->switch_event[ item->cpu ].next_comm )
-  );
-  cctx->switch_event[ item->cpu ].next_prio = 0;
+  thd_name = cctx->thread_names[ api ][ index ];
+  memcpy( se.next_comm, thd_name, sizeof( se.next_comm ) );
+  se.next_prio = 0;
 
-  cctx->switch_event[ item->cpu ].event_header_extended.id = 31;
-  cctx->switch_event[ item->cpu ].event_header_extended.event_id = 0;
-  cctx->switch_event[ item->cpu ].event_header_extended.ns = item->ns;
+  evt_head_name->id = 31;
+  evt_head_name->event_id = 0;
+  evt_head_name->ns = item->ns;
 
-  cctx->content_size[ item->cpu ] += sizeof( switch_event ) * 8;
-  cctx->packet_size[ item->cpu] += sizeof( switch_event ) * 8;
+  cctx->content_size[ item->cpu ] += sched_switch_size;
+  cctx->packet_size[ item->cpu] += sched_switch_size;
 
-  fwrite( &cctx->switch_event[ item->cpu ],
-  sizeof( cctx->switch_event[ item->cpu ] ), 1, f[ item->cpu ] );
+  fwrite( &se, sizeof( se ), 1, f[ item->cpu ] );
 }
 
 void map_thread_names( client_context *cctx, const client_item *item )
 {
-  size_t api_id = get_api_of_id( cctx->thread_id_name[ item->cpu ].thread_id );
+  thread_id_name thd_id_name = cctx->thread_id_name[ item->cpu ];
+  uint64_t thread_name = item->data;
+  size_t k = THREAD_NAME_SIZE;
+  size_t api;
+  size_t index;
+  size_t i;
+  size_t j;
 
-  if( api_id > THREAD_API_SIZE || api_id == 0 ) {
+  api = get_api_of_id( thd_id_name.thread_id );
+  if( api > THREAD_API_SIZE || api == 0 ) {
     return;
   } else {
-    api_id--;
+    api--;
   }
 
-  size_t thread_id = get_index_of_id( cctx->thread_id_name[ item->cpu ].thread_id );
-  if( thread_id > THREAD_ID_SIZE ) {
+  index = get_index_of_id( thd_id_name.thread_id );
+  if( index > THREAD_ID_SIZE ) {
     return;
   }
-  uint64_t thread_name = item->data;
 
-  size_t i = cctx->thread_id_name[ item->cpu ].name_index == 0 ? 0 :
-  THREAD_NAME_SIZE/2;
-  size_t j = cctx->thread_id_name[ item->cpu ].name_index == 0 ?
-  THREAD_NAME_SIZE/2 : THREAD_NAME_SIZE;
+  i = thd_id_name.name_index == 0 ? 0 : k/2;
+  j = thd_id_name.name_index == 0 ? k/2 : k;
 
   for( i = 0; i < j ; i++ ) {
-    cctx->thread_names[ api_id ][ thread_id ][ i ] = ( thread_name  & 0xff );
+    cctx->thread_names[ api ][ index ][ i ] = ( thread_name  & 0xff );
     thread_name = ( thread_name >> 8 );
   }
-  cctx->thread_id_name[ item->cpu ].name_index++;
+  thd_id_name.name_index++;
 }
 
 static void print_item( client_context *cctx, const client_item *item )
 {
+  sched_switch *se = &cctx->sched_switch[ item->cpu ];
+  thread_id_name *thd_id_name = &cctx->thread_id_name[ item->cpu ];
+  event_header_compact *evt_head_name = &se->event_header_compact;
+  size_t api;
+  size_t index;
+  char *thd_name;
+
   if( cctx->timestamp_begin[ item->cpu ] == 0 ) {
     cctx->timestamp_begin[ item->cpu ] = item->ns;
   }
@@ -300,49 +311,41 @@ static void print_item( client_context *cctx, const client_item *item )
   switch ( item->event )
   {
     case RTEMS_RECORD_THREAD_SWITCH_OUT:
-      cctx->switch_event[ item->cpu ].event_header_extended.ns = item->ns;
+      ;
+      evt_head_name->ns = item->ns;
 
-      size_t api_id = get_api_of_id( item->data );
-      if( api_id > THREAD_API_SIZE || api_id == 0 ) {
+      api = get_api_of_id( item->data );
+      if( api > THREAD_API_SIZE || api == 0 ) {
         return;
       } else {
-        cctx->switch_event[ item->cpu ].prev_tid =
-        is_idle_task_by_api( api_id ) ? 0 : item->data;
-        cctx->switch_event[ item->cpu ].prev_state =
-        is_idle_task_by_api( api_id ) ? TASK_IDLE : TASK_RUNNING;
-        api_id--;
+        se->prev_tid = is_idle_task_by_api( api ) ? 0 : item->data;
+        se->prev_state = is_idle_task_by_api( api ) ? TASK_IDLE :
+        TASK_RUNNING;
+        api--;
       }
-      size_t thread_id = get_index_of_id( item->data );
-      if( thread_id > THREAD_ID_SIZE ) {
+      index = get_index_of_id( item->data );
+      if( index > THREAD_ID_SIZE ) {
         return;
       }
 
-      memcpy(
-      cctx->switch_event[ item->cpu ].prev_comm,
-      cctx->thread_names[ api_id ][ thread_id ],
-      sizeof( cctx->switch_event[ item->cpu ].prev_comm )
-      );
-      cctx->switch_event[ item->cpu ].prev_prio = 0;
+      thd_name = cctx->thread_names[ api ][ index ];
+      memcpy( se->prev_comm, thd_name, sizeof( se->prev_comm ) );
+      se->prev_prio = 0;
       break;
     case RTEMS_RECORD_THREAD_SWITCH_IN:
       /*
        * current timestamp equals record item timestamp
        */
-      if
-      (
-        item->ns == cctx->switch_event[ item->cpu ].event_header_extended.ns
-      )
-      {
+      if ( item->ns == evt_head_name->ns ) {
         write_sched_switch( cctx, item );
       }
       break;
     case RTEMS_RECORD_THREAD_ID:
-      cctx->thread_id_name[ item->cpu ].thread_id = item->data;
-      cctx->thread_id_name[ item->cpu ].name_index = 0;
+      thd_id_name->thread_id = item->data;
+      thd_id_name->name_index = 0;
       break;
     case RTEMS_RECORD_THREAD_NAME:
-      ;
-      if( cctx->thread_id_name[ item->cpu ].name_index > 1 ) {
+      if( thd_id_name->name_index > 1 ) {
         break;
       }
       map_thread_names( cctx, item );
@@ -569,7 +572,8 @@ int main( int argc, char **argv )
   rtems_record_client_context ctx;
   client_context cctx;
   client_item *items;
-  ctf_packet_context ctf_packet_context;
+  packet_context pckt_ctx;
+  packet_header *pckt_head;
   const char *host;
   uint16_t port;
   const char *input_file;
@@ -582,10 +586,13 @@ int main( int argc, char **argv )
   int longindex;
   size_t n;
   size_t i;
+  size_t pckt_ctx_size;
 
   host = "127.0.0.1";
   port = 1234;
   input_file = "raw_data";
+  pckt_head = &pckt_ctx.packet_header;
+  pckt_ctx_size = sizeof( pckt_ctx ) * 8;
   n = RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT * 1024 * 1024;
 
   while (
@@ -630,8 +637,7 @@ int main( int argc, char **argv )
   SLIST_INIT( &cctx.free_items );
   RB_INIT( &cctx.active_items );
 
-  memcpy( ctf_packet_context.ctf_packet_header.uuid, uuid,
-  sizeof( ctf_packet_context.ctf_packet_header.uuid ) );
+  memcpy( pckt_head->uuid, uuid, sizeof( pckt_head->uuid ) );
 
   generate_metadata();
 
@@ -643,7 +649,7 @@ int main( int argc, char **argv )
     snprintf( file_index, sizeof( file_index ), "%ld", i );
     strcat( filename, file_index );
     event_streams[ i ] = fopen( filename, "wb" );
-    fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1, event_streams[ i ] );
+    fwrite( &pckt_ctx, sizeof( pckt_ctx ), 1, event_streams[ i ] );
     assert( event_streams[ i ] != NULL );
     cctx.event_streams[ i ] = event_streams[ i ];
   }
@@ -674,24 +680,21 @@ int main( int argc, char **argv )
   for ( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT; i++ ) {
     fseek( event_streams[ i ], 0, SEEK_SET );
 
-    ctf_packet_context.ctf_packet_header.ctf_magic = CTF_MAGIC;
-    ctf_packet_context.ctf_packet_header.stream_id = 0;
-    ctf_packet_context.ctf_packet_header.stream_instance_id = i;
+    pckt_head->ctf_magic = CTF_MAGIC;
+    pckt_head->stream_id = 0;
+    pckt_head->stream_instance_id = i;
 
-    ctf_packet_context.timestamp_begin =  cctx.timestamp_begin[ i ];
-    ctf_packet_context.timestamp_end = cctx.timestamp_end[ i ];
+    pckt_ctx.timestamp_begin =  cctx.timestamp_begin[ i ];
+    pckt_ctx.timestamp_end = cctx.timestamp_end[ i ];
 
-    ctf_packet_context.content_size = cctx.content_size[ i ] +
-    sizeof( ctf_packet_context ) * 8;
-    ctf_packet_context.packet_size = cctx.packet_size[ i ] +
-    sizeof( ctf_packet_context ) * 8;
+    pckt_ctx.content_size = cctx.content_size[ i ] + pckt_ctx_size;
+    pckt_ctx.packet_size = cctx.packet_size[ i ] + pckt_ctx_size;
 
-    ctf_packet_context.packet_seq_num = 0;
-    ctf_packet_context.events_discarded = 0;
-    ctf_packet_context.cpu_id = i;
+    pckt_ctx.packet_seq_num = 0;
+    pckt_ctx.events_discarded = 0;
+    pckt_ctx.cpu_id = i;
 
-    fwrite( &ctf_packet_context, sizeof( ctf_packet_context ), 1,
-    event_streams[ i ] );
+    fwrite( &pckt_ctx, sizeof( pckt_ctx ), 1, event_streams[ i ] );
     fclose( event_streams[ i ] );
   }
 
