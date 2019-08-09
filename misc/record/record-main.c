@@ -113,12 +113,6 @@ typedef struct switch_event {
   int32_t                      next_prio;
 } __attribute__((__packed__)) switch_event;
 
-typedef struct switch_out_int {
-  uint64_t                     ns;
-  uint64_t                     out_data;
-  int64_t                      prev_state;
-} __attribute__((__packed__)) switch_out_int;
-
 typedef struct thread_id_name {
   uint64_t                     thread_id;
   size_t                       name_index;
@@ -138,8 +132,8 @@ typedef struct client_context {
   uint64_t          timestamp_end[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t          content_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   uint64_t          packet_size[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
-  switch_out_int    switch_out_int[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   thread_id_name    thread_id_name[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
+  switch_event      switch_event[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
   /*
    * @brief Thread names indexed by API and object index.
    *
@@ -230,65 +224,42 @@ static bool is_idle_task_by_api( size_t api )
 
 void write_sched_switch( client_context *cctx, const client_item *item )
 {
-  switch_event switch_event;
   FILE **f = cctx->event_streams;
-
-  size_t api_id = get_api_of_id( cctx->switch_out_int[ item->cpu ].out_data );
+  size_t api_id = get_api_of_id( item->data );
 
   if( api_id > THREAD_API_SIZE || api_id == 0 ) {
     return;
   } else {
+    cctx->switch_event[ item->cpu ].next_tid = is_idle_task_by_api( api_id ) ?
+    0 : item->data;
     api_id--;
   }
 
-  size_t thread_id = get_index_of_id(
-  cctx->switch_out_int[ item->cpu ].out_data
-  );
-
+  size_t thread_id = get_index_of_id( item->data );
   if( thread_id > THREAD_ID_SIZE ) {
     return;
   }
 
-  /* 
-   * prev_* values
-   */ 
-  memcpy( switch_event.prev_comm, cctx->thread_names[ api_id ][ thread_id ],
-  sizeof( switch_event.prev_comm ) );
-  switch_event.prev_tid = cctx->switch_out_int[ item->cpu ].prev_state ==
-  TASK_IDLE ? 0 : cctx->switch_out_int[ item->cpu ].out_data;
-  switch_event.prev_prio = 0;
-  switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
-
-  /* 
+  /*
    * next_* values
    */
-  api_id = get_api_of_id( item->data );
+  memcpy
+  (
+  cctx->switch_event[ item->cpu ].next_comm,
+  cctx->thread_names[ api_id ][ thread_id ],
+  sizeof( cctx->switch_event[ item->cpu ].next_comm )
+  );
+  cctx->switch_event[ item->cpu ].next_prio = 0;
 
-  if( api_id > THREAD_API_SIZE || api_id == 0 ) {
-    return;
-  } else {
-    api_id--;
-  }
-
-  thread_id = get_index_of_id( item->data );
-
-  if( thread_id > THREAD_ID_SIZE ) {
-    return;
-  }
-
-  memcpy( switch_event.next_comm, cctx->thread_names[ api_id ][ thread_id ],
-  sizeof( switch_event.next_comm ) );
-  switch_event.next_tid = is_idle_task_by_api( api_id ) ? 0 : item->data;
-  switch_event.next_prio = 0;
-
-  switch_event.event_header_extended.id = 31;
-  switch_event.event_header_extended.event_id = 0;
-  switch_event.event_header_extended.ns = item->ns;
+  cctx->switch_event[ item->cpu ].event_header_extended.id = 31;
+  cctx->switch_event[ item->cpu ].event_header_extended.event_id = 0;
+  cctx->switch_event[ item->cpu ].event_header_extended.ns = item->ns;
 
   cctx->content_size[ item->cpu ] += sizeof( switch_event ) * 8;
   cctx->packet_size[ item->cpu] += sizeof( switch_event ) * 8;
 
-  fwrite( &switch_event, sizeof( switch_event ), 1, f[ item->cpu ] );
+  fwrite( &cctx->switch_event[ item->cpu ],
+  sizeof( cctx->switch_event[ item->cpu ] ), 1, f[ item->cpu ] );
 }
 
 void map_thread_names( client_context *cctx, const client_item *item )
@@ -329,22 +300,41 @@ static void print_item( client_context *cctx, const client_item *item )
   switch ( item->event )
   {
     case RTEMS_RECORD_THREAD_SWITCH_OUT:
-      cctx->switch_out_int[ item->cpu ].ns = item->ns;
-      cctx->switch_out_int[ item->cpu ].out_data = item->data;
+      cctx->switch_event[ item->cpu ].event_header_extended.ns = item->ns;
 
       size_t api_id = get_api_of_id( item->data );
       if( api_id > THREAD_API_SIZE || api_id == 0 ) {
-        break;
+        return;
+      } else {
+        cctx->switch_event[ item->cpu ].prev_tid =
+        is_idle_task_by_api( api_id ) ? 0 : item->data;
+        cctx->switch_event[ item->cpu ].prev_state =
+        is_idle_task_by_api( api_id ) ? TASK_IDLE : TASK_RUNNING;
+        api_id--;
       }
-      cctx->switch_out_int[ item->cpu ].prev_state =
-      is_idle_task_by_api( api_id ) ? TASK_IDLE : TASK_RUNNING;
+      size_t thread_id = get_index_of_id( item->data );
+      if( thread_id > THREAD_ID_SIZE ) {
+        return;
+      }
+
+      memcpy(
+      cctx->switch_event[ item->cpu ].prev_comm,
+      cctx->thread_names[ api_id ][ thread_id ],
+      sizeof( cctx->switch_event[ item->cpu ].prev_comm )
+      );
+      cctx->switch_event[ item->cpu ].prev_prio = 0;
       break;
     case RTEMS_RECORD_THREAD_SWITCH_IN:
-      /* 
+      /*
        * current timestamp equals record item timestamp
        */
-      if( item->ns == cctx->switch_out_int[ item->cpu ].ns )
+      if
+      (
+        item->ns == cctx->switch_event[ item->cpu ].event_header_extended.ns
+      )
+      {
         write_sched_switch( cctx, item );
+      }
       break;
     case RTEMS_RECORD_THREAD_ID:
       cctx->thread_id_name[ item->cpu ].thread_id = item->data;
