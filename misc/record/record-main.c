@@ -54,6 +54,8 @@
 #define TASK_RUNNING              0x0000
 #define TASK_IDLE                 0x0402
 #define THREAD_NAME_SIZE          16
+#define THREAD_API_SIZE           3
+#define THREAD_ID_SIZE            65536
 
 static const struct option longopts[] = {
   { "help", 0, NULL, 'h' },
@@ -143,7 +145,7 @@ typedef struct client_context {
    * 
    * The API indices are 0 for Internal API, 1 for Classic API and 2 for POSIX API.
    */
-  char thread_names[ 3 ][ 65536 ][ THREAD_NAME_SIZE] ;
+  char thread_names[ THREAD_API_SIZE ][ THREAD_ID_SIZE ][ THREAD_NAME_SIZE] ;
 
 } client_context;
 
@@ -223,8 +225,10 @@ void write_sched_switch( client_context *cctx, const client_item *item ){
   switch_event switch_event;
   FILE **f = cctx->event_streams;
 
-  size_t api_id = get_api_id( cctx->switch_out_int[ item->cpu ].out_data ) - 1;
+  size_t api_id = get_api_id( cctx->switch_out_int[ item->cpu ].out_data );
+  if( api_id > THREAD_API_SIZE || api_id == 0 ) return; else api_id--;
   size_t thread_id = get_thread_id( cctx->switch_out_int[ item->cpu ].out_data );
+  if( thread_id > THREAD_ID_SIZE ) return;
 
   // prev_* values
   memcpy( switch_event.prev_comm, cctx->thread_names[ api_id ][ thread_id ], 
@@ -237,14 +241,15 @@ void write_sched_switch( client_context *cctx, const client_item *item ){
   switch_event.prev_state = cctx->switch_out_int[ item->cpu ].prev_state;
 
   // next_* values
-  api_id = get_api_id( item->data )- 1;
+  api_id = get_api_id( item->data );
+  if( api_id > THREAD_API_SIZE || api_id == 0 ) return; else api_id--;
   thread_id = get_thread_id( item->data );
+  if( thread_id > THREAD_ID_SIZE ) return;
 
   memcpy( switch_event.next_comm, cctx->thread_names[ api_id ][ thread_id ], 
   sizeof( switch_event.next_comm ) );
   // set to 0 if next thread is idle
-  switch_event.next_tid = ( get_api_id( item->data ) == 1 ) ? 0 : 
-  item->data;
+  switch_event.next_tid = ( api_id == 1 ) ? 0 : item->data;
 
   switch_event.next_prio = 0;
 
@@ -288,8 +293,10 @@ static void print_item( client_context *cctx, const client_item *item )
       ;
       if( cctx->thread_id_name[ item->cpu ].name_index > 1 ) break;
 
-      size_t api_id = get_api_id( cctx->thread_id_name[ item->cpu ].thread_id ) - 1;
+      size_t api_id = get_api_id( cctx->thread_id_name[ item->cpu ].thread_id );
+      if( api_id > THREAD_API_SIZE || api_id == 0 ) break; else api_id--;
       size_t thread_id = get_thread_id( cctx->thread_id_name[ item->cpu ].thread_id );
+      if( thread_id > THREAD_ID_SIZE ) break;
       uint64_t thread_name = item->data;
 
       size_t i = cctx->thread_id_name[ item->cpu ].name_index == 0 ? 0 :
