@@ -56,6 +56,8 @@
 #define THREAD_NAME_SIZE          16
 #define THREAD_API_SIZE           3
 #define THREAD_ID_SIZE            65536
+#define CHAR_BIT_SIZE             8
+#define COMPACT_HEADER_ID         31
 
 static const struct option longopts[] = {
   { "help", 0, NULL, 'h' },
@@ -144,7 +146,7 @@ typedef struct client_context {
 } client_context;
 
 static const uint8_t uuid[] = { 0x6a, 0x77, 0x15, 0xd0, 0xb5, 0x02, 0x4c, 0x65,
-    0x86, 0x78, 0x67, 0x77, 0xac, 0x7f, 0x75, 0x5a };
+0x86, 0x78, 0x67, 0x77, 0xac, 0x7f, 0x75, 0x5a };
 
 static inline int item_cmp( const void *pa, const void *pb )
 {
@@ -224,15 +226,21 @@ static bool is_idle_task_by_api( size_t api )
 
 void write_sched_switch( client_context *cctx, const client_item *item )
 {
-  FILE **f = cctx->event_streams;
-  sched_switch se = cctx->sched_switch[ item->cpu ];
-  event_header_compact *evt_head_name = &se.event_header_compact;
-  size_t sched_switch_size = sizeof( sched_switch ) * 8;
+  event_header_compact *evt_head_name;
+  FILE **f;
+  sched_switch se;
+  size_t se_size;
   char *thd_name;
   size_t api;
   size_t index;
 
+  f = cctx->event_streams;
+  se = cctx->sched_switch[ item->cpu ];
+  evt_head_name = &se.event_header_compact;
+  se_size = sizeof( sched_switch ) * CHAR_BIT_SIZE;
   api = get_api_of_id( item->data );
+  index = get_index_of_id( item->data );
+
   if( api > THREAD_API_SIZE || api == 0 ) {
     return;
   } else {
@@ -240,7 +248,6 @@ void write_sched_switch( client_context *cctx, const client_item *item )
     api--;
   }
 
-  index = get_index_of_id( item->data );
   if( index > THREAD_ID_SIZE ) {
     return;
   }
@@ -252,56 +259,61 @@ void write_sched_switch( client_context *cctx, const client_item *item )
   memcpy( se.next_comm, thd_name, sizeof( se.next_comm ) );
   se.next_prio = 0;
 
-  evt_head_name->id = 31;
+  evt_head_name->id = COMPACT_HEADER_ID;
   evt_head_name->event_id = 0;
   evt_head_name->ns = item->ns;
 
-  cctx->content_size[ item->cpu ] += sched_switch_size;
-  cctx->packet_size[ item->cpu] += sched_switch_size;
+  cctx->content_size[ item->cpu ] += se_size;
+  cctx->packet_size[ item->cpu] += se_size;
 
   fwrite( &se, sizeof( se ), 1, f[ item->cpu ] );
 }
 
 void map_thread_names( client_context *cctx, const client_item *item )
 {
-  thread_id_name thd_id_name = cctx->thread_id_name[ item->cpu ];
-  uint64_t thread_name = item->data;
-  size_t k = THREAD_NAME_SIZE;
+  thread_id_name thd_id_name;
+  uint64_t thread_name;
   size_t api;
   size_t index;
   size_t i;
   size_t j;
 
+  thd_id_name = cctx->thread_id_name[ item->cpu ];
+  thread_name = item->data;
   api = get_api_of_id( thd_id_name.thread_id );
+  index = get_index_of_id( thd_id_name.thread_id );
+  i = thd_id_name.name_index == 0 ? 0 : THREAD_NAME_SIZE/2;
+  j = thd_id_name.name_index == 0 ? THREAD_NAME_SIZE/2 : THREAD_NAME_SIZE;
+
   if( api > THREAD_API_SIZE || api == 0 ) {
     return;
   } else {
     api--;
   }
 
-  index = get_index_of_id( thd_id_name.thread_id );
   if( index > THREAD_ID_SIZE ) {
     return;
   }
 
-  i = thd_id_name.name_index == 0 ? 0 : k/2;
-  j = thd_id_name.name_index == 0 ? k/2 : k;
-
   for( i = 0; i < j ; i++ ) {
     cctx->thread_names[ api ][ index ][ i ] = ( thread_name  & 0xff );
-    thread_name = ( thread_name >> 8 );
+    thread_name = ( thread_name >> CHAR_BIT_SIZE );
   }
   thd_id_name.name_index++;
 }
 
 static void print_item( client_context *cctx, const client_item *item )
 {
-  sched_switch *se = &cctx->sched_switch[ item->cpu ];
-  thread_id_name *thd_id_name = &cctx->thread_id_name[ item->cpu ];
-  event_header_compact *evt_head_name = &se->event_header_compact;
+  sched_switch *se;
+  thread_id_name *thd_id_name;
+  event_header_compact *evt_head_name;
   size_t api;
   size_t index;
   char *thd_name;
+
+  se = &cctx->sched_switch[ item->cpu ];
+  thd_id_name = &cctx->thread_id_name[ item->cpu ];
+  evt_head_name = &se->event_header_compact;
 
   if( cctx->timestamp_begin[ item->cpu ] == 0 ) {
     cctx->timestamp_begin[ item->cpu ] = item->ns;
@@ -313,19 +325,20 @@ static void print_item( client_context *cctx, const client_item *item )
     case RTEMS_RECORD_THREAD_SWITCH_OUT:
       ;
       evt_head_name->ns = item->ns;
-
       api = get_api_of_id( item->data );
+      index = get_index_of_id( item->data );
+
       if( api > THREAD_API_SIZE || api == 0 ) {
-        return;
+        break;
       } else {
         se->prev_tid = is_idle_task_by_api( api ) ? 0 : item->data;
         se->prev_state = is_idle_task_by_api( api ) ? TASK_IDLE :
         TASK_RUNNING;
         api--;
       }
-      index = get_index_of_id( item->data );
+
       if( index > THREAD_ID_SIZE ) {
-        return;
+        break;
       }
 
       thd_name = cctx->thread_names[ api ][ index ];
@@ -562,7 +575,7 @@ static const char metadata[] =
 void generate_metadata()
 {
   FILE *file = fopen( "metadata", "w" );
-  assert( file !=  NULL );
+  assert( file != NULL );
   fwrite( metadata, sizeof( metadata ) - 1, 1, file );
   fclose( file );
 }
@@ -577,9 +590,9 @@ int main( int argc, char **argv )
   const char *host;
   uint16_t port;
   const char *input_file;
-  bool input_file_flag = false;
-  bool input_TCP_host = false;
-  bool input_TCP_port = false;
+  bool input_file_flag;
+  bool input_TCP_host;
+  bool input_TCP_port;
   int fd;
   int rv;
   int opt;
@@ -587,12 +600,18 @@ int main( int argc, char **argv )
   size_t n;
   size_t i;
   size_t pckt_ctx_size;
+  char filename[ 256 ];
+  char file_index[ 256 ];
+  FILE *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 
   host = "127.0.0.1";
   port = 1234;
   input_file = "raw_data";
+  input_file_flag = false;
+  input_TCP_host = false;
+  input_TCP_port = false;
   pckt_head = &pckt_ctx.packet_header;
-  pckt_ctx_size = sizeof( pckt_ctx ) * 8;
+  pckt_ctx_size = sizeof( pckt_ctx ) * CHAR_BIT_SIZE;
   n = RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT * 1024 * 1024;
 
   while (
@@ -641,11 +660,8 @@ int main( int argc, char **argv )
 
   generate_metadata();
 
-  FILE *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
-
   for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT; i++ ) {
-    char filename[ 256 ] = "event_";
-    char file_index[ 256 ];
+    strcpy( filename, "event_" );
     snprintf( file_index, sizeof( file_index ), "%ld", i );
     strcat( filename, file_index );
     event_streams[ i ] = fopen( filename, "wb" );
