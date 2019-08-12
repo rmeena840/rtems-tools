@@ -561,13 +561,20 @@ static const char metadata[] =
 "\tid = 0;\n"
 "\tstream_id = 0;\n"
 "\tfields := struct {\n"
-"\t\tinteger { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10;} _prev_comm[16];\n"
-"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_tid;\n"
-"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _prev_prio;\n"
-"\t\tinteger { size = 64; align = 8; signed = 1; encoding = none; base = 10; } _prev_state;\n"
-"\t\tinteger { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10; } _next_comm[16];\n"
-"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_tid;\n"
-"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; } _next_prio;\n"
+"\t\tinteger { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10;}\
+ _prev_comm[16];\n"
+"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; }\
+ _prev_tid;\n"
+"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; }\
+ _prev_prio;\n"
+"\t\tinteger { size = 64; align = 8; signed = 1; encoding = none; base = 10; }\
+ _prev_state;\n"
+"\t\tinteger { size = 8; align = 8; signed = 0; encoding = UTF8; base = 10; }\
+ _next_comm[16];\n"
+"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; }\
+ _next_tid;\n"
+"\t\tinteger { size = 32; align = 8; signed = 1; encoding = none; base = 10; }\
+ _next_prio;\n"
 "\t};\n"
 "};"
 ;
@@ -601,7 +608,6 @@ int main( int argc, char **argv )
   size_t i;
   size_t pckt_ctx_size;
   char filename[ 256 ];
-  char file_index[ 256 ];
   FILE *event_streams[ RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT ];
 
   host = "127.0.0.1";
@@ -661,9 +667,7 @@ int main( int argc, char **argv )
   generate_metadata();
 
   for( i = 0; i < RTEMS_RECORD_CLIENT_MAXIMUM_CPU_COUNT; i++ ) {
-    strcpy( filename, "event_" );
-    snprintf( file_index, sizeof( file_index ), "%ld", i );
-    strcat( filename, file_index );
+    snprintf( filename, sizeof( filename ), "event_%zu", i );
     event_streams[ i ] = fopen( filename, "wb" );
     fwrite( &pckt_ctx, sizeof( pckt_ctx ), 1, event_streams[ i ] );
     assert( event_streams[ i ] != NULL );
